@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "WeatherReport",
+  "project_id": "cce128b5-c682-47cb-87a7-39b15247b96f"
+}

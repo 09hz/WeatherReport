@@ -24,3 +24,9 @@ htmlcov/
 build/
 dist/
 *.egg-info/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+.beads-credential-key
+.beads/proxieddb/
+*.gate.lock*
