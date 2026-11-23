@@ -2,3 +2,25 @@
 .venv
 __pycache__
 .github
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Databases
+instance/
+*.db
+*.sqlite
+*.sqlite3
+
+# Python caches / build artifacts
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
