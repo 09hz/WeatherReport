@@ -30,3 +30,11 @@ dist/
 .beads-credential-key
 .beads/proxieddb/
 *.gate.lock*
+
+# CEO and Local Task Files
+architecture_analysis.md
+CEOtask1.md
+CEOtask.md
+Localtask.md
+docs
+.worktrees
