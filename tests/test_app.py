@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
+
+import pytest
 
 from app import create_app
 from app.database.schema import TABLE_NAMES, existing_tables
@@ -65,3 +68,48 @@ def test_method_not_allowed_returns_json_error(client):
     response = client.put("/health")
     assert response.status_code == 405
     assert "error" in response.get_json()
+
+
+def test_health_reports_degraded_when_a_required_table_is_missing(client, connection):
+    dropped = ["journal_entries"]
+    with connection:
+        for table in dropped:
+            connection.execute(f"DROP TABLE {table}")
+
+    response = client.get("/health")
+    assert response.status_code == 503
+    assert response.mimetype == "application/json"
+    body = response.get_json()
+    assert body["status"] == "degraded"
+    assert body["database"]["connected"] is False
+    assert body["database"]["missing_tables"] == sorted(dropped)
+
+
+def test_health_handles_sqlite_error_without_raising(client, monkeypatch: pytest.MonkeyPatch):
+    def boom(_connection):
+        raise sqlite3.Error("database is locked")
+
+    monkeypatch.setattr("app.routes.health.existing_tables", boom)
+
+    response = client.get("/health")
+    assert response.status_code == 503
+    assert response.mimetype == "application/json"
+    body = response.get_json()
+    assert body["status"] == "degraded"
+    assert body["database"] == {"connected": False, "missing_tables": []}
+    assert set(body) == {"status", "environment", "database", "weather_provider"}
+
+
+def test_health_reports_injected_weather_provider_and_environment(app, client):
+    class FakeProvider:
+        name = "fake-provider"
+        available = True
+
+    app.extensions["weather_provider"] = FakeProvider()
+
+    response = client.get("/health")
+    assert response.status_code == 200
+    body = response.get_json()
+    assert body["weather_provider"]["name"] == "fake-provider"
+    assert body["weather_provider"]["available"] is True
+    assert body["environment"] == app.config["ENV"]
