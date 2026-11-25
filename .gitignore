@@ -33,8 +33,4 @@ dist/
 
 # CEO and Local Task Files
 tasks/
-tasks/CEOtask1.md
-tasks/CEOtask.md
-tasks/Localtask.md
-
 .worktrees
