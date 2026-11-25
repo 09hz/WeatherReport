@@ -41,7 +41,9 @@
           <input class="field__input" type="text" id="location" name="location"
                  maxlength="255" value="{{ location }}">
           <p class="field__hint">
-            A place name, or <span class="mono">lat,lon</span> such as
+            A US ZIP code such as <span class="mono">78701</span>, a city and
+            state such as <span class="mono">Austin, TX</span>, or
+            <span class="mono">lat,lon</span> such as
             <span class="mono">45.5,-122.6</span>. 255 characters max.
           </p>
           {% if invalid.location %}
@@ -62,6 +64,9 @@
       <div class="panel__body stack">
         <p>
           <span class="tag">{{ snapshot.provider or 'unknown' }}</span>
+          {% if place %}
+            <span class="tag">matched {{ place.matched }}</span>
+          {% endif %}
           {% if cache %}
             <span class="tag">cache {{ 'hit' if cache.hit else 'miss' }}</span>
             {% if cache.age_seconds is not none %}
@@ -69,6 +74,16 @@
             {% endif %}
           {% endif %}
         </p>
+
+        {% if place %}
+          <p class="view__lead">
+            <span class="mono">{{ location }}</span> resolved to
+            <span class="mono">{{ place.label }}</span>
+            (<span class="mono">{{ place.latitude }},{{ place.longitude }}</span>)
+            from the bundled US place data. Conditions come from the nearest
+            reporting station, which may be some distance away.
+          </p>
+        {% endif %}
 
         <dl class="datagrid">
           {% for row in rows %}

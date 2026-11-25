@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from typing import Any
+from typing import Any, NamedTuple
 
 from ..errors import NotFoundError, ValidationError
 from ..validation import parse_coordinates
+from . import geocoder
 from .weather_provider import (
     WeatherProvider,
     build_provider,
@@ -68,8 +69,51 @@ def _to_dict(row: sqlite3.Row, *, include_raw: bool = False) -> dict[str, Any]:
 
 
 def fetch_current(location: str, provider: WeatherProvider) -> dict[str, Any]:
-    """Fetch live conditions. Raises if no provider is configured."""
-    return provider.fetch_current(location)
+    """Fetch live conditions for a typed location. Raises if unconfigured.
+
+    A provider that only understands coordinates (NWS) gets the location
+    resolved through the bundled offline place data first, so "Austin, TX"
+    and "78701" work as well as "30.27,-97.74". The resolved place is carried
+    back on the snapshot so the UI and the stored row can name the place the
+    user asked for instead of a coordinate pair.
+
+    Providers that geocode for themselves, and the fake providers tests
+    inject, declare requires_coordinates=False (or omit it) and are handed
+    the location untouched.
+    """
+    resolved = resolve_location(location, provider)
+    snapshot = dict(provider.fetch_current(resolved.provider_location))
+    if resolved.place is not None:
+        snapshot["location"] = resolved.place.label
+        snapshot["place"] = resolved.place.to_dict()
+        # What the user actually typed, kept so a surprising match ("Austin"
+        # resolving to Austin, TX) is auditable rather than mysterious.
+        snapshot["query"] = location
+    if getattr(provider, "requires_coordinates", False):
+        snapshot.setdefault("coordinates", resolved.provider_location)
+    return snapshot
+
+
+class ResolvedLocation(NamedTuple):
+    """A location in the form its provider accepts, plus the place it names."""
+
+    provider_location: str
+    place: Any | None  # geocoder.Place when a place name was resolved
+
+
+def resolve_location(location: str, provider: WeatherProvider) -> ResolvedLocation:
+    """Turn typed input into something `provider` can accept.
+
+    Coordinates are passed through untouched so the coordinate path never
+    depends on the dataset. Anything else is geocoded only when the provider
+    requires coordinates.
+    """
+    if not getattr(provider, "requires_coordinates", False):
+        return ResolvedLocation(location, None)
+    if geocoder.looks_like_coordinates(location):
+        return ResolvedLocation(location, None)
+    place = geocoder.resolve(location)
+    return ResolvedLocation(place.as_location(), place)
 
 
 def save_snapshot(
@@ -165,6 +209,7 @@ def count_snapshots(
 
 
 __all__ = [
+    "ResolvedLocation",
     "build_provider",
     "canonical_location",
     "classify_conditions",
@@ -173,5 +218,6 @@ __all__ = [
     "get_snapshot",
     "list_snapshots",
     "normalize",
+    "resolve_location",
     "save_snapshot",
 ]

@@ -278,6 +278,10 @@ class NwsWeatherProvider:
     """WeatherProvider backed by api.weather.gov (keyless)."""
 
     name = "nws"
+    #: NWS has no geocoder of its own: it accepts coordinates only. The
+    #: service layer reads this to decide whether a typed place name must be
+    #: resolved against the bundled dataset first.
+    requires_coordinates = True
 
     def __init__(
         self,

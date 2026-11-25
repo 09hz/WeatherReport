@@ -35,6 +35,7 @@ from .helpers import field_errors, notice_from_error, page_window, pager, presen
 #: through `helpers.present()`.
 CURRENT_FIELDS = (
     "location",
+    "coordinates",
     "observed_at",
     "temperature_c",
     "humidity",
@@ -83,18 +84,25 @@ def _cache() -> WeatherCache:
     return current_app.extensions["weather_cache"]
 
 
-def _fetch_cached(location: str) -> tuple[dict[str, Any], dict[str, Any]]:
-    """Fetch conditions through the same TTL cache the JSON API uses."""
+def _fetch_cached(location: str) -> tuple[dict[str, Any], dict[str, Any], Any]:
+    """Fetch conditions through the same TTL cache the JSON API uses.
+
+    Returns (snapshot, cache metadata, resolved place or None). The place is
+    split out of the snapshot because it is chrome for the reader -- "78701
+    resolved to Austin, TX" -- not a measurement belonging in the .datagrid.
+    """
     provider = current_app.extensions["weather_provider"]
     snapshot, cache_meta = fetch_with_cache(
         _cache(),
         location,
         lambda loc: weather_service.fetch_current(loc, provider),
     )
-    # The raw provider payload is API plumbing, not something to render.
     snapshot = dict(snapshot)
+    # The raw provider payload is API plumbing, not something to render.
     snapshot.pop("raw_response", None)
-    return snapshot, cache_meta
+    place = snapshot.pop("place", None)
+    snapshot.pop("query", None)
+    return snapshot, cache_meta, place
 
 
 @bp.route("/weather", methods=("GET", "POST"))
@@ -117,6 +125,7 @@ def weather_current():
         "snapshot": None,
         "rows": [],
         "cache": None,
+        "place": None,
         "notice": None,
         "invalid": {},
     }
@@ -129,7 +138,7 @@ def weather_current():
         # Reuse the API's own validator so the two interfaces cannot disagree
         # about what a usable location is.
         cleaned = required_string({"location": location or None}, "location")
-        snapshot, cache_meta = _fetch_cached(cleaned)
+        snapshot, cache_meta, place = _fetch_cached(cleaned)
         if save:
             stored = weather_service.save_snapshot(get_connection(), snapshot)
             # POST-then-redirect: a refresh re-renders the list, not the write.
@@ -145,9 +154,16 @@ def weather_current():
             snapshot=snapshot,
             rows=present(snapshot, CURRENT_FIELDS),
             cache=cache_meta,
+            place=place,
         )
     except AppError as error:
-        context.update(notice=notice_from_error(error), invalid=field_errors(error))
+        # A failure pinned to one control is that control's error, so the page
+        # notice would just repeat it verbatim. Geocoding made this visible:
+        # an ambiguous "Springfield" rendered the same sentence twice.
+        invalid = field_errors(error)
+        context.update(
+            notice=None if invalid else notice_from_error(error), invalid=invalid
+        )
         return render_template("ui/weather_current.html", **context), error.status_code
 
     return render_template("ui/weather_current.html", **context)
