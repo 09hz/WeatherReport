@@ -162,6 +162,16 @@ otherwise be driven by the caller. Error details always include `reason`,
 
 - **Coordinate rounding** – All input coordinates are rounded to 4 decimal places before lookup.
 
+- **Snapshot locations are canonicalized** – A snapshot whose location is a
+  coordinate pair is stored as `"{lat},{lon}"` built from the rounded values,
+  so `"45.50000, -122.60"` is stored as `"45.5,-122.6"`. Listing snapshots by
+  any spelling of the same coordinates matches, because the filter compares
+  both the submitted string and its canonical form. Free-text locations such
+  as `"Topeka"` are stored verbatim and keep exact-match (case-sensitive)
+  filtering. Rows written before this behaviour existed keep their original
+  string and are matched by that string; they are not retro-canonicalized,
+  which would need a migration.
+
 - **Null measurements preserved** – Missing or null observations are returned as JSON `null`; nothing is guessed, averaged, or interpolated.
 
 - **Current conditions only** – The endpoint returns the single latest observation reported by a nearby station (`data_type: "observation"`). It is not a forecast, and it is not a history API: there is no way to ask for an earlier time, and the reading can already be up to an hour old depending on the station's reporting interval.
