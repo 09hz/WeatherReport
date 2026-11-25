@@ -193,3 +193,45 @@ def test_limit_and_offset_still_apply_with_an_exact_match(app, connection):
     page = weather_service.list_snapshots(connection, location="Topeka", limit=2, offset=3)
 
     assert len(page) == 2
+
+
+# --- count_snapshots must agree with list_snapshots -------------------------
+
+
+@pytest.mark.parametrize(
+    "query",
+    ["45.5,-122.6", "45.50000, -122.60", "45.50,-122.600", "  45.5 , -122.6 ", "Topeka"],
+)
+def test_count_agrees_with_list_for_every_spelling(app, connection, query):
+    """total_count drives has_more, so a disagreement makes pagination lie."""
+    _save(connection, "45.5,-122.6")
+    _save(connection, "45.50000, -122.60")
+    _save(connection, "Topeka")
+
+    rows = weather_service.list_snapshots(connection, location=query)
+    total = weather_service.count_snapshots(connection, location=query)
+
+    assert total == len(rows), f"list/count disagree for {query!r}"
+
+
+def test_count_with_no_filter_matches_unfiltered_list(app, connection):
+    _save(connection, "45.5,-122.6")
+    _save(connection, "Topeka")
+
+    assert weather_service.count_snapshots(connection) == len(
+        weather_service.list_snapshots(connection)
+    )
+
+
+def test_has_more_is_consistent_across_a_paginated_canonical_query(app, connection):
+    for i in range(5):
+        _save(connection, "45.50000, -122.60", temp=float(i))
+
+    total = weather_service.count_snapshots(connection, location="45.5,-122.6")
+    page = weather_service.list_snapshots(
+        connection, location="45.5,-122.6", limit=2, offset=0
+    )
+
+    assert total == 5
+    assert len(page) == 2
+    assert 0 + len(page) < total, "has_more would be computed as False"

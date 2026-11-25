@@ -118,6 +118,24 @@ def get_snapshot(
     return _to_dict(row, include_raw=include_raw)
 
 
+def _location_filter(location: str | None) -> tuple[str, list[Any]]:
+    """WHERE clause + params matching a location the way list/count both must.
+
+    Factored out so `list_snapshots` and `count_snapshots` cannot drift: when
+    only the list side matched both the submitted and canonical spellings,
+    `total_count` and `has_more` disagreed with the rows actually returned and
+    pagination silently lied.
+    """
+    if not location:
+        return "", []
+    canonical = canonical_location(location)
+    if canonical is not None and canonical != location:
+        # Match the submitted string AND its canonical coordinate form: a row
+        # written before canonicalization kept the caller's spelling.
+        return " WHERE location IN (?, ?)", [location, canonical]
+    return " WHERE location = ?", [location]
+
+
 def list_snapshots(
     connection: sqlite3.Connection,
     *,
@@ -125,23 +143,8 @@ def list_snapshots(
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
-    where = ""
-    params: list[Any] = []
-    if location:
-        # Match the submitted string AND its canonical coordinate form. Not
-        # just the canonical one: a snapshot saved through a provider that
-        # passes the location through verbatim is stored exactly as the
-        # client spelled it, so collapsing to canonical alone would start
-        # missing those rows. Matching both makes formatting irrelevant in
-        # either direction.
-        canonical = canonical_location(location)
-        if canonical is not None and canonical != location:
-            where = " WHERE location IN (?, ?)"
-            params = [location, canonical]
-        else:
-            where = " WHERE location = ?"
-            params = [location]
-    params.extend([limit, offset])
+    where, params = _location_filter(location)
+    params = [*params, limit, offset]
     rows = connection.execute(
         f"SELECT {_COLUMNS} FROM weather_snapshots{where} "
         "ORDER BY id DESC LIMIT ? OFFSET ?",
@@ -154,8 +157,7 @@ def count_snapshots(
     connection: sqlite3.Connection, *, location: str | None = None
 ) -> int:
     """Total snapshots matching the same filter `list_snapshots` accepts."""
-    where = " WHERE location = ?" if location else ""
-    params: list[Any] = [location] if location else []
+    where, params = _location_filter(location)
     row = connection.execute(
         f"SELECT COUNT(*) AS total FROM weather_snapshots{where}", params
     ).fetchone()

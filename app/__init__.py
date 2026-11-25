@@ -13,7 +13,7 @@ from .rate_limit import register_rate_limiting
 from .request_log import register_request_logging
 from .routes import register_blueprints
 from .services.weather_cache import WeatherCache
-from .services.weather_provider import build_provider
+from .services.weather_provider import build_nws_provider, build_provider
 
 __version__ = "0.1.0"
 
@@ -52,6 +52,14 @@ def create_app(overrides: Mapping[str, Any] | None = None) -> Flask:
     # Weather provider is resolved once, at startup. With no credentials it is
     # the unconfigured provider, so no external request can ever be made.
     app.extensions["weather_provider"] = build_provider(app.config)
+    # The coordinate-based observations route always uses NWS, which is keyless.
+    # Restored after merge 2667f24 dropped this wiring (WeatherReport-83j).
+    provider = app.extensions["weather_provider"]
+    app.extensions["nws_provider"] = (
+        provider
+        if getattr(provider, "name", None) == "nws"
+        else build_nws_provider(app.config)
+    )
     # TTL cache in front of the provider: cuts repeat lookups for one
     # location down to a single outbound request per window.
     app.extensions["weather_cache"] = WeatherCache(
@@ -77,6 +85,7 @@ def create_app(overrides: Mapping[str, Any] | None = None) -> Flask:
                         "GET  /api/limits/status",
                         "GET  /api/weather/provider",
                         "GET  /api/weather/current?location=",
+                        "GET  /api/weather/observations?lat=&lon=",
                         "GET  /api/weather/cached/<location>",
                         "POST /api/weather/snapshots",
                         "GET  /api/weather/snapshots?location=&limit=&offset=",

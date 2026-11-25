@@ -72,6 +72,27 @@ class Config:
     weather_cache_max_entries: int = field(
         default_factory=lambda: _env_int("WEATHER_CACHE_MAX_ENTRIES", 256)
     )
+    # Restored after merge 2667f24 dropped these four fields while keeping the
+    # to_flask_mapping entries that read them (WeatherReport-83j).
+    weather_provider: str = field(
+        default_factory=lambda: _env_str("WEATHER_PROVIDER").lower()
+    )
+    # NWS (api.weather.gov) is keyless but requires a descriptive User-Agent.
+    nws_user_agent: str = field(default_factory=lambda: _env_str("NWS_USER_AGENT"))
+    nws_base_url: str = field(
+        default_factory=lambda: _env_str("NWS_BASE_URL", "https://api.weather.gov")
+    )
+    nws_timeout_seconds: int = field(
+        default_factory=lambda: _env_int(
+            "NWS_TIMEOUT_SECONDS", _env_int("WEATHER_TIMEOUT_SECONDS", 10)
+        )
+    )
+    # Worker-time bound for one whole observation lookup (up to five
+    # sequential upstream requests). 0 means "derive it from the per-request
+    # timeout", which is what the provider does by default.
+    nws_total_timeout_seconds: int = field(
+        default_factory=lambda: _env_int("NWS_TOTAL_TIMEOUT_SECONDS", 0)
+    )
     request_log_enabled: bool = field(
         default_factory=lambda: _env_bool("REQUEST_LOG_ENABLED", True)
     )
@@ -94,12 +115,6 @@ class Config:
         if not path.is_absolute():
             path = PROJECT_ROOT / path
         return path
-    # Worker-time bound for one whole observation lookup (up to five
-    # sequential upstream requests). 0 means "derive it from the per-request
-    # timeout", which is what the provider does by default.
-    nws_total_timeout_seconds: int = field(
-        default_factory=lambda: _env_int("NWS_TOTAL_TIMEOUT_SECONDS", 0)
-    )
 
     @property
     def resolved_database_path(self) -> Path:

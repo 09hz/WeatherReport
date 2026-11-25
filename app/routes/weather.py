@@ -18,6 +18,11 @@ def _provider():
     return current_app.extensions["weather_provider"]
 
 
+def _nws_provider():
+    """Keyless NWS provider used by the coordinate-based observations route."""
+    return current_app.extensions["nws_provider"]
+
+
 def _cache() -> WeatherCache:
     """Response cache attached to the app by the factory."""
     return current_app.extensions["weather_cache"]
@@ -62,6 +67,19 @@ def current_weather():
     snapshot, cache_meta = _fetch_cached(location)
     snapshot.pop("raw_response", None)
     return jsonify({"data": snapshot, "cache": cache_meta}), 200
+
+
+@bp.get("/observations")
+def observations():
+    """Latest NWS observation for ?lat=&lon= (US coverage only).
+
+    Restored after merge 2667f24 dropped this route (WeatherReport-83j).
+    """
+    observation = _nws_provider().fetch_observation(
+        request.args.get("lat"), request.args.get("lon")
+    )
+    observation.pop("raw_response", None)
+    return jsonify({"data": observation}), 200
 
 
 @bp.get("/cached/<path:location>")

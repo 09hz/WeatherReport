@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from typing import Any, Mapping, Protocol, runtime_checkable
 
 from ..errors import ProviderError, ProviderNotConfiguredError
@@ -269,7 +270,15 @@ def build_nws_provider(config: Mapping[str, Any]) -> WeatherProvider:
 
 
 def build_provider(config: Mapping[str, Any]) -> WeatherProvider:
-    """Select a provider from Flask config; unconfigured by default."""
+    """Select a provider from Flask config; unconfigured by default.
+
+    WEATHER_PROVIDER=nws selects the keyless NWS provider (no API key needed).
+    This branch was dropped by merge 2667f24, which left build_nws_provider
+    defined but unreachable and silently disabled the whole NWS feature
+    (WeatherReport-83j).
+    """
+    if str(config.get("WEATHER_PROVIDER") or "").strip().lower() == "nws":
+        return build_nws_provider(config)
     if not config.get("WEATHER_PROVIDER_CONFIGURED"):
         return UnconfiguredWeatherProvider()
     return HttpWeatherProvider(
