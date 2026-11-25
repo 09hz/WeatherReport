@@ -80,6 +80,12 @@ class Config:
             "NWS_TIMEOUT_SECONDS", _env_int("WEATHER_TIMEOUT_SECONDS", 10)
         )
     )
+    # Worker-time bound for one whole observation lookup (up to five
+    # sequential upstream requests). 0 means "derive it from the per-request
+    # timeout", which is what the provider does by default.
+    nws_total_timeout_seconds: int = field(
+        default_factory=lambda: _env_int("NWS_TOTAL_TIMEOUT_SECONDS", 0)
+    )
 
     @property
     def resolved_database_path(self) -> Path:
@@ -116,6 +122,7 @@ class Config:
             "NWS_USER_AGENT": self.nws_user_agent,
             "NWS_BASE_URL": self.nws_base_url,
             "NWS_TIMEOUT_SECONDS": self.nws_timeout_seconds,
+            "NWS_TOTAL_TIMEOUT_SECONDS": self.nws_total_timeout_seconds,
             "JSON_SORT_KEYS": False,
         }
 

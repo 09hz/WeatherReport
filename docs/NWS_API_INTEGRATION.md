@@ -20,7 +20,8 @@ The provider makes three sequential API calls in order:
 |----------|-------------|---------|
 | `NWS_USER_AGENT` | Descriptive identifier for your app (required by NWS) | `WeatherReport/0.1 (set NWS_USER_AGENT with a contact)` |
 | `NWS_BASE_URL` | Base URL for NWS API requests. Must be an `https://api.weather.gov` URL with no port; any other value is ignored with a logged warning and the default is used, so bad configuration never blocks startup | `https://api.weather.gov` |
-| `NWS_TIMEOUT_SECONDS` | Request timeout in seconds. A non-numeric value is ignored with a logged warning and falls back to `10` | falls back to `WEATHER_TIMEOUT_SECONDS`, else `10` |
+| `NWS_TIMEOUT_SECONDS` | Per-request timeout in seconds. A non-numeric value is ignored with a logged warning and falls back to `10` | falls back to `WEATHER_TIMEOUT_SECONDS`, else `10` |
+| `NWS_TOTAL_TIMEOUT_SECONDS` | Worker-time budget for one whole observation lookup. `0`, unset or non-numeric derives it as 3x the per-request timeout | `0` (derive) |
 | `WEATHER_PROVIDER` | Explicit provider selection; empty uses legacy behavior | (empty string) |
 
 Note that `NWS_BASE_URL` cannot be pointed at a local stub. The SSRF guard
@@ -103,17 +104,41 @@ number NWS actually reported.
 Station failover tries at most three nearby stations for a single point lookup.
 Failures fall into two modes. Recoverable failures — an HTTP error status, a
 non-JSON or non-object response body, a connection-level failure such as a
-reset, a missing timestamp, or no usable measurement — skip that station and try
-the next one. Unskippable failures — a timeout (the request chain is already over
-its latency budget) and a URL that fails the trust check (it must never be
-retried elsewhere) — abort the whole request immediately. Exhausting every
-candidate yields `nws_no_observation` with HTTP 502, whose details carry
-`stations_tried`, `last_failure` and `last_upstream_status`.
+reset, or no usable measurement — skip that station and try the next one.
+Unskippable failures — a timeout, an exhausted chain budget, and a URL that
+fails the trust check (it must never be retried elsewhere) — abort the whole
+request immediately. Exhausting every candidate yields `nws_no_observation`
+with HTTP 502, whose details carry `stations_tried`, `last_failure` and
+`last_upstream_status`.
+
+A missing timestamp is *not* a failure: the observation is returned with
+`observed_at` set to `null`.
 
 | Failure | Behaviour |
 |---|---|
-| HTTP error status, non-JSON/non-object body, connection failure, missing timestamp, no usable measurement | Skip this station, try the next one |
-| Timeout, untrusted URL | Abort immediately, no retry |
+| HTTP error status, non-JSON/non-object body, connection failure, no usable measurement | Skip this station, try the next one |
+| Timeout, exhausted total budget, untrusted URL | Abort immediately, no retry |
+
+## Timeouts and the chain budget
+
+A single lookup makes up to five sequential upstream requests: `/points`, the
+station list, and up to three station observations. These are bounded twice:
+
+- **Per request** by `NWS_TIMEOUT_SECONDS`. This bounds one round trip.
+- **Per chain** by `NWS_TOTAL_TIMEOUT_SECONDS`, a wall-clock deadline fixed
+  before the first request. This bounds how long one API call can occupy a
+  worker, which per-request limits alone do not: five requests each finishing
+  just inside a 10s limit is a 50s request.
+
+Each request is issued with `min(remaining budget, NWS_TIMEOUT_SECONDS)`, so a
+request is never given more time than the chain has left and never more than
+the configured per-request limit. When the budget is gone the provider raises
+**before** issuing another request, so an over-budget chain cannot buy itself
+another round trip. That error is `weather_provider_timeout` with HTTP 504 and
+`details.scope == "total_budget"`, distinguishing it from a single request that
+timed out on its own.
+
+A cached `/points` hit issues no request and therefore spends no budget.
 
 The upstream HTTP status is mapped using the *kind* of request being made
 (point, stations, observation), not the problem-type string in the response

@@ -10,6 +10,12 @@ coordinate-based and US-only:
 URLs taken from an NWS response are validated (https + exact host) before
 they are fetched. Missing or null measurements stay None; nothing is
 defaulted, averaged or interpolated.
+
+A single lookup makes up to five sequential upstream requests, so the chain
+is bounded twice: each request gets the configured per-request timeout, and
+the whole chain gets a total deadline (see TOTAL_TIMEOUT_MULTIPLIER) so a
+run of slow-but-under-limit responses cannot tie up a worker for the sum of
+the individual limits.
 """
 
 from __future__ import annotations
@@ -17,6 +23,7 @@ from __future__ import annotations
 import re
 import threading
 from collections import OrderedDict
+from time import monotonic
 from typing import Any, Mapping, NamedTuple
 from urllib.parse import quote, urlsplit
 
@@ -31,6 +38,14 @@ ACCEPT = "application/geo+json"
 
 MAX_STATION_ATTEMPTS = 3
 POINT_CACHE_SIZE = 256
+
+# One fetch_observation() call makes up to five sequential upstream requests
+# (point, stations, and up to MAX_STATION_ATTEMPTS observations). Each is
+# bounded individually, but without a shared budget a chain of slow-but-
+# under-limit responses can occupy a worker for the sum of them. The whole
+# chain therefore gets a total deadline, defaulting to this multiple of the
+# per-request timeout.
+TOTAL_TIMEOUT_MULTIPLIER = 3
 
 # A station request that fails for one of these reasons ends the whole
 # request: a timeout means the chain is already over its latency budget, and
@@ -270,6 +285,7 @@ class NwsWeatherProvider:
         user_agent: str = "",
         base_url: str = DEFAULT_BASE_URL,
         timeout: int | float = 10,
+        total_timeout: int | float | None = None,
         session: Any | None = None,
         max_station_attempts: int = MAX_STATION_ATTEMPTS,
         cache_size: int = POINT_CACHE_SIZE,
@@ -277,6 +293,13 @@ class NwsWeatherProvider:
         self._base_url = ensure_nws_url((base_url or DEFAULT_BASE_URL).rstrip("/"))
         self._user_agent = (user_agent or "").strip() or DEFAULT_USER_AGENT
         self._timeout = timeout
+        # Worker-time bound for one whole fetch_observation() chain, as
+        # opposed to self._timeout which bounds a single request.
+        self._total_timeout = float(
+            total_timeout
+            if total_timeout is not None and float(total_timeout) > 0
+            else float(timeout) * TOTAL_TIMEOUT_MULTIPLIER
+        )
         self._session = session
         self._max_attempts = max(1, int(max_station_attempts))
         self._cache_size = max(1, int(cache_size))
@@ -304,8 +327,10 @@ class NwsWeatherProvider:
 
     def fetch_observation(self, lat: Any, lon: Any) -> dict[str, Any]:
         latitude, longitude = parse_coordinates(lat, lon)
-        point = self.get_point(latitude, longitude)
-        stations = self._stations(point["observation_stations"])
+        # One budget for the whole chain, fixed before the first request.
+        deadline = monotonic() + self._total_timeout
+        point = self.get_point(latitude, longitude, deadline=deadline)
+        stations = self._stations(point["observation_stations"], deadline=deadline)
         if not stations:
             raise ProviderError(
                 "No NWS observation stations are available for this point.",
@@ -319,11 +344,14 @@ class NwsWeatherProvider:
             tried.append(station_id)
             url = f"{self._base_url}/stations/{quote(station_id, safe='')}/observations/latest"
             try:
-                raw = self._get_json(url, kind=KIND_OBSERVATION)
+                raw = self._get_json(url, kind=KIND_OBSERVATION, deadline=deadline)
             except ProviderError as exc:
                 # A station that fails in a recoverable way falls through to
                 # the next candidate; timeouts and URL-trust failures abort
-                # the whole request immediately.
+                # the whole request immediately. An exhausted total budget
+                # surfaces as reason="timeout", so it aborts here too rather
+                # than letting the loop start another request it cannot pay
+                # for.
                 if exc.details.get("reason") in STATION_ABORT_REASONS:
                     raise
                 last_failure = exc
@@ -352,7 +380,9 @@ class NwsWeatherProvider:
             log_traceback=False,
         )
 
-    def get_point(self, latitude: float, longitude: float) -> dict[str, Any]:
+    def get_point(
+        self, latitude: float, longitude: float, *, deadline: float | None = None
+    ) -> dict[str, Any]:
         key = (latitude, longitude)
         with self._lock:
             cached = self._points.get(key)
@@ -362,7 +392,9 @@ class NwsWeatherProvider:
                 # mutate state shared by every other caller.
                 return dict(cached)
         raw = self._get_json(
-            f"{self._base_url}/points/{latitude},{longitude}", kind=KIND_POINT
+            f"{self._base_url}/points/{latitude},{longitude}",
+            kind=KIND_POINT,
+            deadline=deadline,
         )
         props = raw.get("properties")
         if not isinstance(props, Mapping):
@@ -390,8 +422,8 @@ class NwsWeatherProvider:
                 self._points.popitem(last=False)
         return dict(point)
 
-    def _stations(self, url: str) -> list[str]:
-        raw = self._get_json(ensure_nws_url(url), kind=KIND_STATIONS)
+    def _stations(self, url: str, *, deadline: float | None = None) -> list[str]:
+        raw = self._get_json(ensure_nws_url(url), kind=KIND_STATIONS, deadline=deadline)
         features = raw.get("features")
         if not isinstance(features, list):
             raise ProviderError(
@@ -406,7 +438,11 @@ class NwsWeatherProvider:
         return ids
 
     def _get_json(
-        self, url: str, *, kind: str = KIND_OBSERVATION
+        self,
+        url: str,
+        *,
+        kind: str = KIND_OBSERVATION,
+        deadline: float | None = None,
     ) -> Mapping[str, Any]:
         ensure_nws_url(url)
         try:
@@ -414,11 +450,32 @@ class NwsWeatherProvider:
         except ImportError as exc:  # pragma: no cover - requests is in requirements
             raise ProviderError("The 'requests' package is required.") from exc
 
+        # Per-request timeout is the smaller of what is left in the chain's
+        # budget and the configured per-request limit. An exhausted budget
+        # raises BEFORE the request is issued, so an over-budget chain cannot
+        # buy itself another upstream round trip.
+        timeout: float | int = self._timeout
+        if deadline is not None:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise ProviderError(
+                    "NWS request budget exhausted before completing the lookup.",
+                    details={
+                        "reason": "timeout",
+                        "scope": "total_budget",
+                        "request_kind": kind,
+                    },
+                    status_code=504,
+                    code="weather_provider_timeout",
+                    log_traceback=False,
+                )
+            timeout = min(remaining, float(self._timeout))
+
         client = self._session or requests
         headers = {"User-Agent": self._user_agent, "Accept": ACCEPT}
         try:
             response = client.get(
-                url, headers=headers, timeout=self._timeout, allow_redirects=False
+                url, headers=headers, timeout=timeout, allow_redirects=False
             )
         except (requests.Timeout, TimeoutError) as exc:
             raise ProviderError(

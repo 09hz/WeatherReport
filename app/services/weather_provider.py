@@ -193,10 +193,24 @@ def build_nws_provider(config: Mapping[str, Any]) -> WeatherProvider:
         )
         timeout = 10
 
+    # 0 / unset / unusable means "let the provider derive the chain budget
+    # from the per-request timeout", so a bad value degrades to the default
+    # rather than raising.
+    try:
+        total_timeout: int | None = int(config.get("NWS_TOTAL_TIMEOUT_SECONDS", 0)) or None
+    except (TypeError, ValueError):
+        logger.warning(
+            "Ignoring non-numeric NWS_TOTAL_TIMEOUT_SECONDS=%r; deriving it "
+            "from NWS_TIMEOUT_SECONDS instead.",
+            config.get("NWS_TOTAL_TIMEOUT_SECONDS"),
+        )
+        total_timeout = None
+
     return NwsWeatherProvider(
         user_agent=user_agent,
         base_url=base_url,
         timeout=timeout,
+        total_timeout=total_timeout,
     )
 
 
