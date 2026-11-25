@@ -9,6 +9,7 @@ observations and never makes outbound requests.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Mapping, Protocol, runtime_checkable
 
 from ..errors import ProviderError, ProviderNotConfiguredError
@@ -28,6 +29,59 @@ class WeatherProvider(Protocol):
     def fetch_current(self, location: str) -> dict[str, Any]:
         """Return a normalized weather dictionary for `location`."""
         ...
+
+
+# Canonical condition vocabulary. Order matters: the first pattern that
+# matches wins, so the more specific and more hazardous conditions are
+# checked before the broad ones ("thunderstorm" before "rain",
+# "freezing rain" before "rain", "partly cloudy" before "clear").
+CONDITION_UNKNOWN = "unknown"
+
+_CONDITION_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("thunderstorm", re.compile(r"thunder|t-?storm|lightning|squall")),
+    ("sleet", re.compile(r"sleet|freezing\s+rain|ice\s+pellet|freezing\s+drizzle")),
+    ("hail", re.compile(r"\bhail\b|graupel")),
+    ("snow", re.compile(r"snow|blizzard|flurr(y|ies)|wintry\s+mix")),
+    ("rain", re.compile(r"rain|drizzle|shower|precip|\bwet\b")),
+    ("fog", re.compile(r"\bfog(gy)?\b|\bmist\b|\bhaze\b|\bhazy\b|\bsmoke\b|\bdust\b")),
+    ("windy", re.compile(r"\bwind(y|s)?\b|\bbreez(y|e)\b|\bgust")),
+    ("cloudy", re.compile(r"cloud|overcast|\bobscured\b")),
+    ("clear", re.compile(r"\bclear\b|\bsunny\b|\bsun\b|\bfair\b|\bfine\b")),
+)
+
+CANONICAL_CONDITIONS: tuple[str, ...] = tuple(
+    code for code, _ in _CONDITION_PATTERNS
+) + (CONDITION_UNKNOWN,)
+
+# "partly cloudy" and friends are cloud cover, not clear sky; this guard
+# keeps a "partly sunny" style string out of the "clear" bucket.
+_PARTIAL_CLOUD = re.compile(r"part(ly|ial(ly)?)|scattered|few|broken|mostly\s+cloud")
+
+
+def classify_conditions(text: Any) -> str:
+    """Map free-text provider conditions onto one canonical code.
+
+    Tokenizes loosely (whitespace, punctuation and case are ignored) rather
+    than matching provider fields exactly, so wording differences between
+    providers collapse onto the same code. Anything unrecognized becomes
+    "unknown" — never a guessed condition.
+    """
+    if text is None or isinstance(text, bool):
+        return CONDITION_UNKNOWN
+    if isinstance(text, (list, tuple, set)):
+        text = " ".join(str(item) for item in text)
+    haystack = re.sub(r"[^a-z0-9\s-]+", " ", str(text).lower())
+    haystack = " ".join(haystack.split())
+    if not haystack:
+        return CONDITION_UNKNOWN
+
+    for code, pattern in _CONDITION_PATTERNS:
+        if not pattern.search(haystack):
+            continue
+        if code == "clear" and _PARTIAL_CLOUD.search(haystack):
+            return "cloudy"
+        return code
+    return CONDITION_UNKNOWN
 
 
 def normalize(
@@ -60,6 +114,7 @@ def normalize(
         "humidity": _as_float(main.get("humidity", raw.get("humidity"))),
         "wind_speed_kph": _as_float(wind_speed),
         "conditions": conditions,
+        "condition_code": classify_conditions(conditions),
         "provider": provider,
         "raw_response": raw,
     }

@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from flask import Flask
 
-from . import health, journal, weather
+from . import health, journal, limits, weather
 
-BLUEPRINTS = (health.bp, weather.bp, journal.bp)
+BLUEPRINTS = (health.bp, weather.bp, journal.bp, limits.bp)
 
 
 def register_blueprints(app: Flask) -> None:
@@ -14,4 +14,4 @@ def register_blueprints(app: Flask) -> None:
         app.register_blueprint(blueprint)
 
 
-__all__ = ["register_blueprints", "health", "journal", "weather"]
+__all__ = ["register_blueprints", "health", "journal", "limits", "weather"]

@@ -73,6 +73,13 @@ def required_date(payload: Mapping[str, Any], field: str) -> str:
     return parsed.isoformat()
 
 
+def optional_date(payload: Mapping[str, Any], field: str) -> str | None:
+    """Validate an ISO-8601 date when present; None when absent."""
+    if payload.get(field) in (None, ""):
+        return None
+    return required_date(payload, field)
+
+
 def optional_positive_int(
     payload: Mapping[str, Any], field: str
 ) -> int | None:

@@ -66,6 +66,34 @@ class Config:
     weather_timeout_seconds: int = field(
         default_factory=lambda: _env_int("WEATHER_TIMEOUT_SECONDS", 10)
     )
+    weather_cache_ttl_seconds: int = field(
+        default_factory=lambda: _env_int("WEATHER_CACHE_TTL_SECONDS", 300)
+    )
+    weather_cache_max_entries: int = field(
+        default_factory=lambda: _env_int("WEATHER_CACHE_MAX_ENTRIES", 256)
+    )
+    request_log_enabled: bool = field(
+        default_factory=lambda: _env_bool("REQUEST_LOG_ENABLED", True)
+    )
+    request_log_path: str = field(
+        default_factory=lambda: _env_str("REQUEST_LOG_PATH", ".beads/logs/app.log")
+    )
+    rate_limit_enabled: bool = field(
+        default_factory=lambda: _env_bool("RATE_LIMIT_ENABLED", True)
+    )
+    rate_limit_requests: int = field(
+        default_factory=lambda: _env_int("RATE_LIMIT_REQUESTS", 100)
+    )
+    rate_limit_window_seconds: int = field(
+        default_factory=lambda: _env_int("RATE_LIMIT_WINDOW_SECONDS", 60)
+    )
+
+    @property
+    def resolved_request_log_path(self) -> Path:
+        path = Path(self.request_log_path).expanduser()
+        if not path.is_absolute():
+            path = PROJECT_ROOT / path
+        return path
 
     @property
     def resolved_database_path(self) -> Path:
@@ -98,6 +126,15 @@ class Config:
             "WEATHER_API_BASE_URL": self.weather_api_base_url,
             "WEATHER_TIMEOUT_SECONDS": self.weather_timeout_seconds,
             "WEATHER_PROVIDER_CONFIGURED": self.weather_provider_configured,
+            "WEATHER_CACHE_TTL_SECONDS": self.weather_cache_ttl_seconds,
+            "WEATHER_CACHE_MAX_ENTRIES": self.weather_cache_max_entries,
+            # Auditing and throttling are process-wide side effects, so a
+            # test run opts in explicitly rather than inheriting them.
+            "REQUEST_LOG_ENABLED": self.request_log_enabled and not self.testing,
+            "REQUEST_LOG_PATH": str(self.resolved_request_log_path),
+            "RATE_LIMIT_ENABLED": self.rate_limit_enabled and not self.testing,
+            "RATE_LIMIT_REQUESTS": self.rate_limit_requests,
+            "RATE_LIMIT_WINDOW_SECONDS": self.rate_limit_window_seconds,
             "JSON_SORT_KEYS": False,
         }
 
