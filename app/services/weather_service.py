@@ -10,6 +10,7 @@ from ..errors import NotFoundError
 from .weather_provider import (
     WeatherProvider,
     build_provider,
+    classify_conditions,
     normalize,
     serialize_raw,
 )
@@ -29,6 +30,9 @@ def _to_dict(row: sqlite3.Row, *, include_raw: bool = False) -> dict[str, Any]:
         "humidity": row["humidity"],
         "wind_speed_kph": row["wind_speed_kph"],
         "conditions": row["conditions"],
+        # Derived on read, so stored rows need no migration and the
+        # canonical vocabulary can evolve without rewriting history.
+        "condition_code": classify_conditions(row["conditions"]),
         "provider": row["provider"],
         "created_at": row["created_at"],
     }
@@ -102,8 +106,22 @@ def list_snapshots(
     return [_to_dict(row) for row in rows]
 
 
+def count_snapshots(
+    connection: sqlite3.Connection, *, location: str | None = None
+) -> int:
+    """Total snapshots matching the same filter `list_snapshots` accepts."""
+    where = " WHERE location = ?" if location else ""
+    params: list[Any] = [location] if location else []
+    row = connection.execute(
+        f"SELECT COUNT(*) AS total FROM weather_snapshots{where}", params
+    ).fetchone()
+    return int(row["total"] if hasattr(row, "keys") else row[0])
+
+
 __all__ = [
     "build_provider",
+    "classify_conditions",
+    "count_snapshots",
     "fetch_current",
     "get_snapshot",
     "list_snapshots",

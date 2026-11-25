@@ -46,8 +46,9 @@ def test_entry_persists_across_app_contexts(client, connection):
 
 
 def test_list_entries_returns_all_created(client):
-    _create(client, title="First")
-    _create(client, title="Second")
+    # Distinct locations: same date + location is now a 409 (TASK-007).
+    _create(client, title="First", location="Oslo")
+    _create(client, title="Second", location="Lisbon")
     body = client.get("/api/journal/entries").get_json()
     assert body["count"] == 2
     assert {e["title"] for e in body["data"]} == {"First", "Second"}
@@ -71,7 +72,7 @@ def test_search_filters_by_location(client):
 
 def test_limit_and_offset_paginate(client):
     for index in range(3):
-        _create(client, title=f"Entry {index}")
+        _create(client, title=f"Entry {index}", date=f"2026-11-2{index}")
     page = client.get("/api/journal/entries?limit=2").get_json()
     assert page["count"] == 2
     rest = client.get("/api/journal/entries?limit=2&offset=2").get_json()

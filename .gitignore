@@ -32,5 +32,5 @@ dist/
 *.gate.lock*
 
 # CEO and Local Task Files
-/tasks
+tasks/
 .worktrees
