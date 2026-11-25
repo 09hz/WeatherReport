@@ -66,20 +66,6 @@ class Config:
     weather_timeout_seconds: int = field(
         default_factory=lambda: _env_int("WEATHER_TIMEOUT_SECONDS", 10)
     )
-    # Optional explicit provider selection ("nws"); empty keeps legacy behaviour.
-    weather_provider: str = field(
-        default_factory=lambda: _env_str("WEATHER_PROVIDER").lower()
-    )
-    # NWS (api.weather.gov) is keyless but requires a descriptive User-Agent.
-    nws_user_agent: str = field(default_factory=lambda: _env_str("NWS_USER_AGENT"))
-    nws_base_url: str = field(
-        default_factory=lambda: _env_str("NWS_BASE_URL", "https://api.weather.gov")
-    )
-    nws_timeout_seconds: int = field(
-        default_factory=lambda: _env_int(
-            "NWS_TIMEOUT_SECONDS", _env_int("WEATHER_TIMEOUT_SECONDS", 10)
-        )
-    )
 
     @property
     def resolved_database_path(self) -> Path:
@@ -112,10 +98,6 @@ class Config:
             "WEATHER_API_BASE_URL": self.weather_api_base_url,
             "WEATHER_TIMEOUT_SECONDS": self.weather_timeout_seconds,
             "WEATHER_PROVIDER_CONFIGURED": self.weather_provider_configured,
-            "WEATHER_PROVIDER": self.weather_provider,
-            "NWS_USER_AGENT": self.nws_user_agent,
-            "NWS_BASE_URL": self.nws_base_url,
-            "NWS_TIMEOUT_SECONDS": self.nws_timeout_seconds,
             "JSON_SORT_KEYS": False,
         }
 

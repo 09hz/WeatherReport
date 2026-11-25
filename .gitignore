@@ -32,7 +32,9 @@ dist/
 *.gate.lock*
 
 # CEO and Local Task Files
-CEOtask1.md
-CEOtask.md
-Localtask.md
+tasks/
+tasks/CEOtask1.md
+tasks/CEOtask.md
+tasks/Localtask.md
+
 .worktrees

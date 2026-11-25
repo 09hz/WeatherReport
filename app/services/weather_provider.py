@@ -140,30 +140,8 @@ class HttpWeatherProvider:
         return normalize(payload, location=location, provider=self.name)
 
 
-_NWS_UA_PLACEHOLDER = "your_app_name (your_contact_here)"
-
-
-def build_nws_provider(config: Mapping[str, Any]) -> WeatherProvider:
-    """Build the keyless NWS provider from Flask config."""
-    from .nws_provider import DEFAULT_BASE_URL, NwsWeatherProvider
-
-    user_agent = str(config.get("NWS_USER_AGENT") or "")
-    if user_agent.strip().lower() == _NWS_UA_PLACEHOLDER:
-        user_agent = ""  # unedited .env.example value: use the generic default
-    return NwsWeatherProvider(
-        user_agent=user_agent,
-        base_url=str(config.get("NWS_BASE_URL") or DEFAULT_BASE_URL),
-        timeout=int(config.get("NWS_TIMEOUT_SECONDS", 10)),
-    )
-
-
 def build_provider(config: Mapping[str, Any]) -> WeatherProvider:
-    """Select a provider from Flask config; unconfigured by default.
-
-    WEATHER_PROVIDER=nws selects the keyless NWS provider (no API key needed).
-    """
-    if str(config.get("WEATHER_PROVIDER") or "").strip().lower() == "nws":
-        return build_nws_provider(config)
+    """Select a provider from Flask config; unconfigured by default."""
     if not config.get("WEATHER_PROVIDER_CONFIGURED"):
         return UnconfiguredWeatherProvider()
     return HttpWeatherProvider(
