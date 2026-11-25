@@ -17,6 +17,11 @@ def _provider():
     return current_app.extensions["weather_provider"]
 
 
+def _nws_provider():
+    """Keyless NWS provider used by the coordinate-based observations route."""
+    return current_app.extensions["nws_provider"]
+
+
 @bp.get("/provider")
 def provider_status():
     """Report whether external weather lookups are enabled."""
@@ -45,6 +50,16 @@ def current_weather():
     snapshot = weather_service.fetch_current(location, _provider())
     snapshot.pop("raw_response", None)
     return jsonify({"data": snapshot}), 200
+
+
+@bp.get("/observations")
+def observations():
+    """Latest NWS observation for ?lat=&lon= (US coverage only)."""
+    observation = _nws_provider().fetch_observation(
+        request.args.get("lat"), request.args.get("lon")
+    )
+    observation.pop("raw_response", None)
+    return jsonify({"data": observation}), 200
 
 
 @bp.post("/snapshots")
