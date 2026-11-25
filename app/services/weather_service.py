@@ -6,7 +6,8 @@ import json
 import sqlite3
 from typing import Any
 
-from ..errors import NotFoundError
+from ..errors import NotFoundError, ValidationError
+from ..validation import parse_coordinates
 from .weather_provider import (
     WeatherProvider,
     build_provider,
@@ -19,6 +20,28 @@ _COLUMNS = (
     "id, location, observed_at, temperature_c, humidity, "
     "wind_speed_kph, conditions, provider, raw_response, created_at"
 )
+
+
+def canonical_location(location: str) -> str | None:
+    """Canonical "lat,lon" form of a location, or None if it is not one.
+
+    The NWS provider stores `location` as f"{latitude},{longitude}" built from
+    coordinates rounded to 4 decimals, so a client that submitted
+    "45.50000, -122.60" has its snapshot stored as "45.5,-122.6". Returning
+    the canonical form lets a filter match the stored row regardless of how
+    the caller spelled the same coordinates.
+
+    None means "not a coordinate pair", which is the signal to fall back to
+    exact string matching rather than guessing at a free-text place name.
+    """
+    if not isinstance(location, str) or location.count(",") != 1:
+        return None
+    lat, lon = location.split(",")
+    try:
+        latitude, longitude = parse_coordinates(lat, lon)
+    except ValidationError:
+        return None
+    return f"{latitude},{longitude}"
 
 
 def _to_dict(row: sqlite3.Row, *, include_raw: bool = False) -> dict[str, Any]:
@@ -52,8 +75,15 @@ def fetch_current(location: str, provider: WeatherProvider) -> dict[str, Any]:
 def save_snapshot(
     connection: sqlite3.Connection, snapshot: dict[str, Any]
 ) -> dict[str, Any]:
-    """Persist a normalized weather dictionary and return the stored record."""
+    """Persist a normalized weather dictionary and return the stored record.
+
+    A coordinate location is stored in canonical "lat,lon" form so that two
+    spellings of the same point cannot become two un-joinable groups of rows.
+    Free-text locations are stored exactly as given.
+    """
     observed_at = snapshot.get("observed_at")
+    location = snapshot["location"]
+    location = canonical_location(location) or location
     with connection:
         cursor = connection.execute(
             """
@@ -63,7 +93,7 @@ def save_snapshot(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                snapshot["location"],
+                location,
                 str(observed_at) if observed_at is not None else None,
                 snapshot.get("temperature_c"),
                 snapshot.get("humidity"),
@@ -95,8 +125,22 @@ def list_snapshots(
     limit: int = 50,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
-    where = " WHERE location = ?" if location else ""
-    params: list[Any] = [location] if location else []
+    where = ""
+    params: list[Any] = []
+    if location:
+        # Match the submitted string AND its canonical coordinate form. Not
+        # just the canonical one: a snapshot saved through a provider that
+        # passes the location through verbatim is stored exactly as the
+        # client spelled it, so collapsing to canonical alone would start
+        # missing those rows. Matching both makes formatting irrelevant in
+        # either direction.
+        canonical = canonical_location(location)
+        if canonical is not None and canonical != location:
+            where = " WHERE location IN (?, ?)"
+            params = [location, canonical]
+        else:
+            where = " WHERE location = ?"
+            params = [location]
     params.extend([limit, offset])
     rows = connection.execute(
         f"SELECT {_COLUMNS} FROM weather_snapshots{where} "
@@ -120,6 +164,7 @@ def count_snapshots(
 
 __all__ = [
     "build_provider",
+    "canonical_location",
     "classify_conditions",
     "count_snapshots",
     "fetch_current",

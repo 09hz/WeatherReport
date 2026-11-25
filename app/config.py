@@ -94,6 +94,12 @@ class Config:
         if not path.is_absolute():
             path = PROJECT_ROOT / path
         return path
+    # Worker-time bound for one whole observation lookup (up to five
+    # sequential upstream requests). 0 means "derive it from the per-request
+    # timeout", which is what the provider does by default.
+    nws_total_timeout_seconds: int = field(
+        default_factory=lambda: _env_int("NWS_TOTAL_TIMEOUT_SECONDS", 0)
+    )
 
     @property
     def resolved_database_path(self) -> Path:
@@ -126,15 +132,11 @@ class Config:
             "WEATHER_API_BASE_URL": self.weather_api_base_url,
             "WEATHER_TIMEOUT_SECONDS": self.weather_timeout_seconds,
             "WEATHER_PROVIDER_CONFIGURED": self.weather_provider_configured,
-            "WEATHER_CACHE_TTL_SECONDS": self.weather_cache_ttl_seconds,
-            "WEATHER_CACHE_MAX_ENTRIES": self.weather_cache_max_entries,
-            # Auditing and throttling are process-wide side effects, so a
-            # test run opts in explicitly rather than inheriting them.
-            "REQUEST_LOG_ENABLED": self.request_log_enabled and not self.testing,
-            "REQUEST_LOG_PATH": str(self.resolved_request_log_path),
-            "RATE_LIMIT_ENABLED": self.rate_limit_enabled and not self.testing,
-            "RATE_LIMIT_REQUESTS": self.rate_limit_requests,
-            "RATE_LIMIT_WINDOW_SECONDS": self.rate_limit_window_seconds,
+            "WEATHER_PROVIDER": self.weather_provider,
+            "NWS_USER_AGENT": self.nws_user_agent,
+            "NWS_BASE_URL": self.nws_base_url,
+            "NWS_TIMEOUT_SECONDS": self.nws_timeout_seconds,
+            "NWS_TOTAL_TIMEOUT_SECONDS": self.nws_total_timeout_seconds,
             "JSON_SORT_KEYS": False,
         }
 
