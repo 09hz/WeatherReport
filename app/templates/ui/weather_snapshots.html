@@ -1,0 +1,135 @@
+{#
+  Stored snapshots (UI-2). Classes come from docs/UI_CLASS_CONTRACT.md only.
+
+  Context: location (filter), saved (id just written), columns, rows (cells
+  from helpers.present), page (helpers.pager), notice, invalid.
+#}
+{% extends "base.html" %}
+{% block title %}Stored snapshots{% endblock %}
+{% block content %}
+<div class="view">
+  <h1 class="view__title">Stored snapshots</h1>
+  <p class="view__lead">
+    Weather observations persisted by a save action. Read straight from the
+    database — no provider request is made by this page.
+  </p>
+
+  {% if saved %}
+    <div class="notice notice--ok">
+      <p class="notice__title">Snapshot saved</p>
+      <p class="notice__detail">
+        Stored as snapshot <span class="mono">#{{ saved }}</span>.
+      </p>
+    </div>
+  {% endif %}
+
+  {% if notice %}
+    <div class="notice notice--error">
+      <p class="notice__title">{{ notice.title }}</p>
+      {% if notice.details %}
+        <ul class="notice__detail">
+          {% for detail in notice.details %}
+            <li class="mono">{{ detail }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="notice__detail">The list could not be read.</p>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <section class="panel">
+    <h2 class="panel__title">Filter</h2>
+    <div class="panel__body">
+      <form class="form" method="get" action="{{ url_for('ui.weather_snapshots') }}">
+        <div class="field{% if invalid.location %} field--invalid{% endif %}">
+          <label class="field__label" for="location">Location</label>
+          <input class="field__input" type="text" id="location" name="location"
+                 maxlength="255" value="{{ location }}">
+          <p class="field__hint">
+            Exact stored location. Coordinates match their canonical
+            <span class="mono">lat,lon</span> form. Leave empty for all rows.
+          </p>
+          {% if invalid.location %}
+            <p class="field__error">{{ invalid.location }}</p>
+          {% endif %}
+        </div>
+        <div class="actions">
+          <button class="btn btn--primary" type="submit">Apply filter</button>
+          <a class="btn btn--quiet" href="{{ url_for('ui.weather_snapshots') }}">Clear</a>
+          <a class="btn" href="{{ url_for('ui.weather_current') }}">New lookup</a>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2 class="panel__title">
+      Snapshots
+      {% if location %}<span class="tag mono">{{ location }}</span>{% endif %}
+    </h2>
+    <div class="panel__body">
+      {# A snapshot has more columns than a phone has width. The wrapper is
+         focusable and labelled so the overflow is reachable by keyboard. #}
+      <div class="table-scroll" tabindex="0" role="region"
+           aria-label="Stored weather snapshots table">
+      <table class="table">
+        <caption class="visually-hidden">Stored weather snapshots</caption>
+        <thead class="table__head">
+          <tr class="table__row">
+            {% for field, label, numeric in columns %}
+              <th class="table__cell{% if numeric %} table__cell--numeric{% endif %}"
+                  scope="col">{{ label }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for cells in rows %}
+            <tr class="table__row">
+              {% for cell in cells %}
+                <td class="table__cell{% if cell.numeric %} table__cell--numeric{% endif %}">
+                  {% if cell.is_null %}
+                    <span class="placeholder">{{ cell.value }}<span class="visually-hidden"> no value</span></span>
+                  {% else %}
+                    <span class="mono">{{ cell.value }}</span>
+                  {% endif %}
+                </td>
+              {% endfor %}
+            </tr>
+          {% else %}
+            <tr class="table__row">
+              <td class="table__empty" colspan="{{ columns|length }}">
+                No snapshots stored{% if location %} for this location{% endif %}.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </section>
+
+  <div class="pager">
+    <p class="pager__status">
+      Showing {{ page.first }}&ndash;{{ page.last }} of {{ page.total_count }}
+      {% if page.has_more %}
+        &middot; more available
+      {% else %}
+        &middot; end of list
+      {% endif %}
+    </p>
+    {% if page.has_previous %}
+      <a class="pager__link"
+         href="{{ url_for('ui.weather_snapshots', location=location or none, limit=page.limit, offset=page.previous_offset) }}">Previous</a>
+    {% else %}
+      <span class="pager__link pager__link--disabled">Previous</span>
+    {% endif %}
+    {% if page.has_more %}
+      <a class="pager__link"
+         href="{{ url_for('ui.weather_snapshots', location=location or none, limit=page.limit, offset=page.next_offset) }}">Next</a>
+    {% else %}
+      <span class="pager__link pager__link--disabled">Next</span>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

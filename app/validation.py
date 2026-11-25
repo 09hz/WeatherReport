@@ -53,14 +53,6 @@ def required_string(
     return cleaned
 
 
-def optional_string(
-    payload: Mapping[str, Any], field: str, *, max_length: int = 255
-) -> str | None:
-    if payload.get(field) in (None, ""):
-        return None
-    return required_string(payload, field, max_length=max_length)
-
-
 def required_date(payload: Mapping[str, Any], field: str) -> str:
     """Validate an ISO-8601 date (YYYY-MM-DD) and return it normalized."""
     raw = required_string(payload, field, max_length=32)
@@ -75,13 +67,6 @@ def required_date(payload: Mapping[str, Any], field: str) -> str:
                 details={"field": field, "received": raw},
             ) from exc
     return parsed.isoformat()
-
-
-def optional_date(payload: Mapping[str, Any], field: str) -> str | None:
-    """Validate an ISO-8601 date when present; None when absent."""
-    if payload.get(field) in (None, ""):
-        return None
-    return required_date(payload, field)
 
 
 def optional_positive_int(

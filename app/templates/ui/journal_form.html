@@ -1,0 +1,117 @@
+{#
+  Journal create/edit form (UI-3). One template for both: the only differences
+  are the POST target and the wording, so the two paths cannot drift apart in
+  which fields or limits they offer.
+
+  Context: editing, entry_id, action, values (always all form keys, always
+  strings), errors ({field: message}, at most one entry), form_error.
+
+  form_error is a failure that belongs to the whole form rather than to one
+  control — a duplicate (date, location), or a write that failed after
+  validation passed. The contract puts it INSIDE the form above the first
+  field, not in a page-level .notice--error: the reader's attention is already
+  on the form they just submitted. Failures that are not about this form (a
+  missing entry, a bad query string) are rendered by journal_list.html as a
+  notice instead, which is why this template has no notice block at all.
+#}
+{% extends "base.html" %}
+{% block title %}{{ 'Edit entry' if editing else 'New entry' }}{% endblock %}
+{% block content %}
+<div class="view">
+  <h1 class="view__title">{{ 'Edit entry' if editing else 'New entry' }}</h1>
+  <p class="view__lead">
+    {% if editing %}
+      Editing entry <span class="mono">#{{ entry_id }}</span>. All fields are
+      submitted, so clearing one is a change, not an omission.
+    {% else %}
+      One entry per date and location; a duplicate is rejected rather than
+      silently merged.
+    {% endif %}
+  </p>
+
+  <section class="panel">
+    <h2 class="panel__title">{{ 'Entry' if editing else 'New entry' }}</h2>
+    <div class="panel__body">
+      <form class="form" method="post" action="{{ action }}">
+        {% if form_error %}
+          <div class="form__error" role="alert">
+            <p>{{ form_error.title }}</p>
+            {% if form_error.details %}
+              <ul>
+                {% for detail in form_error.details %}<li>{{ detail }}</li>{% endfor %}
+              </ul>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        <div class="stack">
+          <div class="field{% if errors.title %} field--invalid{% endif %}">
+            <label class="field__label" for="title">Title</label>
+            <input class="field__input" type="text" id="title" name="title"
+                   maxlength="200" value="{{ values.title }}">
+            <span class="field__hint">Required. At most 200 characters.</span>
+            {% if errors.title %}
+              <span class="field__error">{{ errors.title }}</span>
+            {% endif %}
+          </div>
+
+          <div class="field{% if errors.date %} field--invalid{% endif %}">
+            <label class="field__label" for="date">Date</label>
+            <input class="field__input mono" type="text" id="date" name="date"
+                   value="{{ values.date }}">
+            <span class="field__hint">Required. ISO-8601, YYYY-MM-DD.</span>
+            {% if errors.date %}
+              <span class="field__error">{{ errors.date }}</span>
+            {% endif %}
+          </div>
+
+          <div class="field{% if errors.location %} field--invalid{% endif %}">
+            <label class="field__label" for="location">Location</label>
+            <input class="field__input" type="text" id="location" name="location"
+                   maxlength="255" value="{{ values.location }}">
+            <span class="field__hint">Required. Compared case-insensitively against existing entries.</span>
+            {% if errors.location %}
+              <span class="field__error">{{ errors.location }}</span>
+            {% endif %}
+          </div>
+
+          <div class="field{% if errors.description %} field--invalid{% endif %}">
+            <label class="field__label" for="description">Description</label>
+            <textarea class="field__textarea" id="description" name="description"
+                      rows="10">{{ values.description }}</textarea>
+            <span class="field__hint">Required. At most 10000 characters.</span>
+            {% if errors.description %}
+              <span class="field__error">{{ errors.description }}</span>
+            {% endif %}
+          </div>
+
+          <div class="field{% if errors.weather_snapshot_id %} field--invalid{% endif %}">
+            <label class="field__label" for="weather_snapshot_id">Weather snapshot ID</label>
+            <input class="field__input mono" type="text" id="weather_snapshot_id"
+                   name="weather_snapshot_id" value="{{ values.weather_snapshot_id }}">
+            <span class="field__hint">
+              Optional. A positive id from
+              <a href="{{ url_for('ui.weather_snapshots') }}">stored snapshots</a>;
+              leave empty for no snapshot.
+            </span>
+            {% if errors.weather_snapshot_id %}
+              <span class="field__error">{{ errors.weather_snapshot_id }}</span>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn--primary" type="submit">
+            {{ 'Save changes' if editing else 'Create entry' }}
+          </button>
+          <a class="btn btn--quiet" href="{{ url_for('ui.journal_list') }}">Cancel</a>
+          {% if editing %}
+            <a class="btn btn--danger"
+               href="{{ url_for('ui.journal_delete', entry_id=entry_id) }}">Delete</a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  </section>
+</div>
+{% endblock %}

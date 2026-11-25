@@ -1,12 +1,16 @@
 # Weather & Journal — Backend Foundation
 
-A modular Flask backend for a Weather & Journal application. It lets you record
-dated journal entries about places and, once a weather provider is configured,
-fetch and archive current weather snapshots that entries can reference.
+A modular Flask backend and server-rendered UI for a Weather & Journal
+application. It lets you record dated journal entries about places, look up
+live US weather by ZIP or city, and archive weather snapshots that entries can
+reference.
 
-This repository is the **backend foundation**: application factory, config,
-SQLite persistence, validated REST endpoints and tests. There is no frontend
-yet, and no weather provider is bundled.
+Two core features:
+
+1. **Journal the weather in your area** — create, search, edit and delete
+   dated entries, each optionally linked to a stored weather snapshot.
+2. **Look up US weather** — live observations from the National Weather
+   Service, by ZIP code, city and state, or coordinates.
 
 ## Status
 
@@ -14,13 +18,40 @@ yet, and no weather provider is bundled.
 | --- | --- |
 | App factory, config, error handling | Implemented |
 | SQLite schema + connection management | Implemented |
-| Journal create / read / search / delete | Implemented |
+| Journal create / read / search / edit / delete | Implemented |
 | Weather snapshot save / list / read | Implemented |
-| External weather retrieval | Adapter only — **disabled until credentials are set** |
-| Frontend | Not started |
+| Live weather retrieval (NWS, keyless) | Implemented |
+| Offline US place-name geocoding | Implemented |
+| Browser UI (`/ui`) | Implemented |
 
 The application never fabricates weather data. With no provider configured,
-weather lookups return HTTP 503 rather than placeholder observations.
+weather lookups return HTTP 503 rather than placeholder observations, and a
+measurement NWS reports as null stays null.
+
+## Weather provider
+
+`WEATHER_PROVIDER=nws` selects the National Weather Service
+(api.weather.gov). **NWS is keyless** — there is no API key, only a required
+descriptive `NWS_USER_AGENT` with a contact address. Coverage is the US plus
+PR, VI, GU, AS and MP.
+
+NWS accepts coordinates only, so place names are resolved from a dataset
+committed to the repo (`app/data/`) before the request is made. A lookup
+therefore makes no geocoding request, and the app's only outbound host is
+api.weather.gov. Accepted input:
+
+```text
+78701            a ZIP code (ZIP+4 is truncated)
+Austin, TX       city and state code
+Austin, Texas    city and state name
+Austin TX        comma optional
+Chicago          bare city, only when it is unique across all states
+30.27,-97.74     coordinates, which skip geocoding entirely
+```
+
+An ambiguous bare city is never guessed at: `Springfield` returns a 400
+listing the 24 states it is in. Regenerate the dataset with
+`python scripts/build_geodata.py` — see `app/data/README.md`.
 
 ## Directory structure
 
@@ -31,26 +62,36 @@ weather lookups return HTTP 503 rather than placeholder observations.
 │   ├── config.py                # env-var configuration (no hardcoded secrets)
 │   ├── errors.py                # error types + uniform JSON error envelope
 │   ├── validation.py            # reusable request-input validators
+│   ├── data/                    # bundled offline place data (GeoNames, CC BY)
+│   ├── static/css/              # brutalist.css
+│   ├── templates/               # base layout + UI pages
 │   ├── database/
 │   │   ├── connection.py        # app-context-scoped SQLite connections
 │   │   └── schema.py            # table/index DDL, idempotent initialization
 │   ├── routes/
 │   │   ├── health.py            # /health
 │   │   ├── journal.py           # /api/journal/*
-│   │   └── weather.py           # /api/weather/*
+│   │   ├── weather.py           # /api/weather/*
+│   │   └── ui/                  # /ui/* server-rendered pages
 │   └── services/
+│       ├── geocoder.py          # offline ZIP/city -> coordinates
 │       ├── journal_service.py   # journal persistence + queries
+│       ├── nws_provider.py      # api.weather.gov adapter (keyless)
 │       ├── weather_provider.py  # provider interface, HTTP adapter, normalizer
 │       └── weather_service.py   # snapshot persistence + retrieval
+├── scripts/
+│   └── build_geodata.py         # regenerate app/data/ from GeoNames
 ├── tests/
 │   ├── conftest.py              # fixtures: temp DB, credential-free env
 │   ├── test_app.py              # init, health check, schema
+│   ├── test_geocoder.py         # place-name resolution + ambiguity
 │   ├── test_journal.py          # journal CRUD + validation
 │   └── test_weather.py          # provider behaviour, normalization, snapshots
 ├── .env.example
 ├── pytest.ini
 ├── requirements.txt
-└── run.py                       # development entry point
+├── main.py                      # `python main.py` — run + clickable UI link
+└── run.py                       # module-level app for WSGI tooling
 ```
 
 Layering is strict: routes handle HTTP and validation, services hold logic and
@@ -65,7 +106,25 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 cp .env.example .env     # optional — the app starts fine without it
-python run.py            # http://127.0.0.1:5000
+python main.py           # prints a clickable link to the UI
+```
+
+`main.py` is the entry point for using the app: it starts the server and
+prints the browser URL as the last line of output, so the link is the thing
+you see. It steps to the next free port if 5000 is already taken.
+
+```bash
+python main.py --open            # also launch the default browser
+python main.py --port 8080       # pick a port
+python main.py --host 0.0.0.0    # expose on the LAN (link shows 127.0.0.1)
+python main.py --debug           # auto-reload + tracebacks
+```
+
+`run.py` remains the bare WSGI-style entry point (`app = create_app()`) for
+tooling that imports a module-level app. Production uses a real WSGI server:
+
+```bash
+gunicorn "app:create_app()"
 ```
 
 Requires Python 3.10+. No API credentials are needed to start the app or run

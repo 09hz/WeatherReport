@@ -1,0 +1,63 @@
+{#
+  Base layout for every UI page. Class names come from
+  docs/UI_CLASS_CONTRACT.md and nothing else.
+
+  Blocks a page may fill:
+    title    - <title> text, appended to the product name
+    content  - the page body, normally a single .view block
+#}<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ title|default('UI') }}{% endblock %} — weather-journal</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/brutalist.css') }}">
+</head>
+<body class="page">
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="masthead">
+    <a class="masthead__title" href="{{ url_for('ui.index') }}">WEATHER-JOURNAL</a>
+    <p class="masthead__tagline">
+      provider <span class="tag">{{ provider.name }}</span>
+      <span class="tag">{{ 'available' if provider.available else 'unavailable' }}</span>
+    </p>
+  </header>
+
+  <nav class="nav">
+    {% for endpoint, label in nav %}
+      <a class="nav__link{% if active == endpoint %} nav__link--active{% endif %}"
+         href="{{ url_for(endpoint) }}">{{ label }}</a>
+    {% endfor %}
+  </nav>
+
+  {% if not provider.available %}
+    <div class="notice notice--warn">
+      <p class="notice__title">No weather provider configured</p>
+      <p class="notice__detail">
+        Live lookups will fail with a 503. Stored snapshots and journal entries
+        still work. See <span class="mono">.env.example</span>.
+      </p>
+    </div>
+  {% endif %}
+
+  <main class="main" id="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <span class="mono">weather-journal {{ version }}</span>
+    &middot;
+    <a href="/">JSON API index</a>
+    &middot;
+    {# CC BY 4.0 attribution for the bundled place data. Required, not optional. #}
+    <span>
+      observations
+      <a href="https://www.weather.gov/">NWS</a>,
+      place data
+      <a href="https://www.geonames.org/">GeoNames</a>
+      (CC BY 4.0)
+    </span>
+  </footer>
+</body>
+</html>

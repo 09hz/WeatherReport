@@ -146,6 +146,9 @@ class UnconfiguredWeatherProvider:
     """Default provider: always refuses, never performs network I/O."""
 
     name = "unconfigured"
+    #: Place names are passed through untouched; nothing is geocoded for a
+    #: provider that cannot answer anyway.
+    requires_coordinates = False
 
     @property
     def available(self) -> bool:
@@ -159,6 +162,9 @@ class HttpWeatherProvider:
     """Generic REST adapter for a configured weather service."""
 
     name = "http"
+    #: A keyed service does its own geocoding, so a place name is forwarded
+    #: verbatim rather than resolved locally.
+    requires_coordinates = False
 
     def __init__(
         self,

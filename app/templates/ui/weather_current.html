@@ -1,0 +1,111 @@
+{#
+  Current conditions (UI-2). Classes come from docs/UI_CLASS_CONTRACT.md only.
+
+  Context: location, snapshot, rows (helpers.present), cache, notice, invalid.
+  Every measurement can be null, so a value is always rendered through the
+  `.placeholder` branch rather than printed raw.
+#}
+{% extends "base.html" %}
+{% block title %}Current conditions{% endblock %}
+{% block content %}
+<div class="view">
+  <h1 class="view__title">Current conditions</h1>
+  <p class="view__lead">
+    Look up live conditions for one location, then store the result as a
+    snapshot. Nothing is written until you ask for it.
+  </p>
+
+  {% if notice %}
+    <div class="notice notice--error">
+      <p class="notice__title">{{ notice.title }}</p>
+      {% if notice.details %}
+        <ul class="notice__detail">
+          {% for detail in notice.details %}
+            <li class="mono">{{ detail }}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="notice__detail">
+          The lookup did not complete. Nothing was stored.
+        </p>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <section class="panel">
+    <h2 class="panel__title">Look up a location</h2>
+    <div class="panel__body">
+      <form class="form" method="post" action="{{ url_for('ui.weather_current') }}">
+        <div class="field{% if invalid.location %} field--invalid{% endif %}">
+          <label class="field__label" for="location">Location</label>
+          <input class="field__input" type="text" id="location" name="location"
+                 maxlength="255" value="{{ location }}">
+          <p class="field__hint">
+            A US ZIP code such as <span class="mono">78701</span>, a city and
+            state such as <span class="mono">Austin, TX</span>, or
+            <span class="mono">lat,lon</span> such as
+            <span class="mono">45.5,-122.6</span>. 255 characters max.
+          </p>
+          {% if invalid.location %}
+            <p class="field__error">{{ invalid.location }}</p>
+          {% endif %}
+        </div>
+        <div class="actions">
+          <button class="btn btn--primary" type="submit" name="action" value="lookup">Look up</button>
+          <a class="btn btn--quiet" href="{{ url_for('ui.weather_snapshots') }}">Stored snapshots</a>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  {% if snapshot %}
+    <section class="panel">
+      <h2 class="panel__title">Observation</h2>
+      <div class="panel__body stack">
+        <p>
+          <span class="tag">{{ snapshot.provider or 'unknown' }}</span>
+          {% if place %}
+            <span class="tag">matched {{ place.matched }}</span>
+          {% endif %}
+          {% if cache %}
+            <span class="tag">cache {{ 'hit' if cache.hit else 'miss' }}</span>
+            {% if cache.age_seconds is not none %}
+              <span class="tag mono">age {{ cache.age_seconds }}s</span>
+            {% endif %}
+          {% endif %}
+        </p>
+
+        {% if place %}
+          <p class="view__lead">
+            <span class="mono">{{ location }}</span> resolved to
+            <span class="mono">{{ place.label }}</span>
+            (<span class="mono">{{ place.latitude }},{{ place.longitude }}</span>)
+            from the bundled US place data. Conditions come from the nearest
+            reporting station, which may be some distance away.
+          </p>
+        {% endif %}
+
+        <dl class="datagrid">
+          {% for row in rows %}
+            <dt class="datagrid__key">{{ row.key }}</dt>
+            <dd class="datagrid__value{% if row.is_null %} datagrid__value--null{% endif %}">
+              {% if row.is_null %}
+                <span class="placeholder">{{ row.value }}<span class="visually-hidden"> no value</span></span>
+              {% else %}
+                <span class="mono">{{ row.value }}</span>
+              {% endif %}
+            </dd>
+          {% endfor %}
+        </dl>
+
+        <form class="form" method="post" action="{{ url_for('ui.weather_current') }}">
+          <input type="hidden" name="location" value="{{ location }}">
+          <div class="actions">
+            <button class="btn btn--primary" type="submit" name="action" value="save">Save snapshot</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}
