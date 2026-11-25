@@ -66,20 +66,34 @@ class Config:
     weather_timeout_seconds: int = field(
         default_factory=lambda: _env_int("WEATHER_TIMEOUT_SECONDS", 10)
     )
-    # Optional explicit provider selection ("nws"); empty keeps legacy behaviour.
-    weather_provider: str = field(
-        default_factory=lambda: _env_str("WEATHER_PROVIDER").lower()
+    weather_cache_ttl_seconds: int = field(
+        default_factory=lambda: _env_int("WEATHER_CACHE_TTL_SECONDS", 300)
     )
-    # NWS (api.weather.gov) is keyless but requires a descriptive User-Agent.
-    nws_user_agent: str = field(default_factory=lambda: _env_str("NWS_USER_AGENT"))
-    nws_base_url: str = field(
-        default_factory=lambda: _env_str("NWS_BASE_URL", "https://api.weather.gov")
+    weather_cache_max_entries: int = field(
+        default_factory=lambda: _env_int("WEATHER_CACHE_MAX_ENTRIES", 256)
     )
-    nws_timeout_seconds: int = field(
-        default_factory=lambda: _env_int(
-            "NWS_TIMEOUT_SECONDS", _env_int("WEATHER_TIMEOUT_SECONDS", 10)
-        )
+    request_log_enabled: bool = field(
+        default_factory=lambda: _env_bool("REQUEST_LOG_ENABLED", True)
     )
+    request_log_path: str = field(
+        default_factory=lambda: _env_str("REQUEST_LOG_PATH", ".beads/logs/app.log")
+    )
+    rate_limit_enabled: bool = field(
+        default_factory=lambda: _env_bool("RATE_LIMIT_ENABLED", True)
+    )
+    rate_limit_requests: int = field(
+        default_factory=lambda: _env_int("RATE_LIMIT_REQUESTS", 100)
+    )
+    rate_limit_window_seconds: int = field(
+        default_factory=lambda: _env_int("RATE_LIMIT_WINDOW_SECONDS", 60)
+    )
+
+    @property
+    def resolved_request_log_path(self) -> Path:
+        path = Path(self.request_log_path).expanduser()
+        if not path.is_absolute():
+            path = PROJECT_ROOT / path
+        return path
     # Worker-time bound for one whole observation lookup (up to five
     # sequential upstream requests). 0 means "derive it from the per-request
     # timeout", which is what the provider does by default.

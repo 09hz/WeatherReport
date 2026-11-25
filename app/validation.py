@@ -73,6 +73,13 @@ def required_date(payload: Mapping[str, Any], field: str) -> str:
     return parsed.isoformat()
 
 
+def optional_date(payload: Mapping[str, Any], field: str) -> str | None:
+    """Validate an ISO-8601 date when present; None when absent."""
+    if payload.get(field) in (None, ""):
+        return None
+    return required_date(payload, field)
+
+
 def optional_positive_int(
     payload: Mapping[str, Any], field: str
 ) -> int | None:
@@ -131,44 +138,3 @@ def bounded_offset(raw: Any) -> int:
             details={"received": value},
         )
     return value
-
-
-COORDINATE_PRECISION = 4
-
-
-def coordinate(raw: Any, field: str, *, minimum: float, maximum: float) -> float:
-    """Validate one coordinate and round it to COORDINATE_PRECISION decimals."""
-    if raw is None or (isinstance(raw, str) and not raw.strip()):
-        raise ValidationError(
-            f"Parameter '{field}' is required.", details={"field": field}
-        )
-    if isinstance(raw, bool) or not isinstance(raw, (int, float, str)):
-        raise ValidationError(
-            f"Parameter '{field}' must be a number.", details={"field": field}
-        )
-    try:
-        value = float(raw)
-    except (TypeError, ValueError) as exc:
-        raise ValidationError(
-            f"Parameter '{field}' must be a number.",
-            details={"field": field, "received": str(raw)[:64]},
-        ) from exc
-    if value != value or value in (float("inf"), float("-inf")):
-        raise ValidationError(
-            f"Parameter '{field}' must be a finite number.", details={"field": field}
-        )
-    if not minimum <= value <= maximum:
-        raise ValidationError(
-            f"Parameter '{field}' must be between {minimum:g} and {maximum:g}.",
-            details={"field": field, "received": value},
-        )
-    rounded = round(value, COORDINATE_PRECISION)
-    return 0.0 if rounded == 0 else rounded
-
-
-def parse_coordinates(lat: Any, lon: Any) -> tuple[float, float]:
-    """Validate a latitude/longitude pair; returns values rounded to 4 decimals."""
-    return (
-        coordinate(lat, "lat", minimum=-90.0, maximum=90.0),
-        coordinate(lon, "lon", minimum=-180.0, maximum=180.0),
-    )

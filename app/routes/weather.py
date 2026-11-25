@@ -5,9 +5,10 @@ from __future__ import annotations
 from flask import Blueprint, current_app, jsonify, request
 
 from ..database.connection import get_connection
-from ..errors import ValidationError
+from ..errors import NotFoundError, ValidationError
 from ..services import weather_service
-from ..validation import bounded_limit, require_mapping, required_string
+from ..services.weather_cache import WeatherCache, fetch_with_cache
+from ..validation import bounded_limit, bounded_offset, require_mapping, required_string
 
 bp = Blueprint("weather", __name__, url_prefix="/api/weather")
 
@@ -17,9 +18,19 @@ def _provider():
     return current_app.extensions["weather_provider"]
 
 
-def _nws_provider():
-    """Keyless NWS provider used by the coordinate-based observations route."""
-    return current_app.extensions["nws_provider"]
+def _cache() -> WeatherCache:
+    """Response cache attached to the app by the factory."""
+    return current_app.extensions["weather_cache"]
+
+
+def _fetch_cached(location: str):
+    """Fetch conditions through the TTL cache; returns (snapshot, metadata)."""
+    provider = _provider()
+    return fetch_with_cache(
+        _cache(),
+        location,
+        lambda loc: weather_service.fetch_current(loc, provider),
+    )
 
 
 @bp.get("/provider")
@@ -32,6 +43,7 @@ def provider_status():
                 "data": {
                     "provider": provider.name,
                     "available": provider.available,
+                    "cache": _cache().stats(),
                 }
             }
         ),
@@ -47,19 +59,26 @@ def current_weather():
         raise ValidationError(
             "Query parameter 'location' is required.", details={"field": "location"}
         )
-    snapshot = weather_service.fetch_current(location, _provider())
+    snapshot, cache_meta = _fetch_cached(location)
     snapshot.pop("raw_response", None)
-    return jsonify({"data": snapshot}), 200
+    return jsonify({"data": snapshot, "cache": cache_meta}), 200
 
 
-@bp.get("/observations")
-def observations():
-    """Latest NWS observation for ?lat=&lon= (US coverage only)."""
-    observation = _nws_provider().fetch_observation(
-        request.args.get("lat"), request.args.get("lon")
+@bp.get("/cached/<path:location>")
+def cached_weather(location: str):
+    """Serve only what is already cached for `location`; never refetches."""
+    cache = _cache()
+    cached, age = cache.get(location)
+    if cached is None:
+        raise NotFoundError(
+            "No cached weather for this location.",
+            details={"location": location, "ttl_seconds": cache.ttl_seconds},
+        )
+    cached.pop("raw_response", None)
+    return (
+        jsonify({"data": cached, "cache": cache.metadata(hit=True, age_seconds=age)}),
+        200,
     )
-    observation.pop("raw_response", None)
-    return jsonify({"data": observation}), 200
 
 
 @bp.post("/snapshots")
@@ -67,19 +86,35 @@ def save_snapshot():
     """Fetch and persist a snapshot for the given location."""
     payload = require_mapping(request.get_json(silent=True) or {})
     location = required_string(payload, "location")
-    snapshot = weather_service.fetch_current(location, _provider())
+    snapshot, cache_meta = _fetch_cached(location)
     stored = weather_service.save_snapshot(get_connection(), snapshot)
-    return jsonify({"data": stored}), 201
+    return jsonify({"data": stored, "cache": cache_meta}), 201
 
 
 @bp.get("/snapshots")
 def list_snapshots():
+    limit = bounded_limit(request.args.get("limit"))
+    offset = bounded_offset(request.args.get("offset"))
+    location = (request.args.get("location") or "").strip() or None
+
+    connection = get_connection()
     snapshots = weather_service.list_snapshots(
-        get_connection(),
-        location=(request.args.get("location") or "").strip() or None,
-        limit=bounded_limit(request.args.get("limit")),
+        connection, location=location, limit=limit, offset=offset
     )
-    return jsonify({"data": snapshots, "count": len(snapshots)}), 200
+    total_count = weather_service.count_snapshots(connection, location=location)
+    return (
+        jsonify(
+            {
+                "data": snapshots,
+                "count": len(snapshots),
+                "total_count": total_count,
+                "has_more": offset + len(snapshots) < total_count,
+                "limit": limit,
+                "offset": offset,
+            }
+        ),
+        200,
+    )
 
 
 @bp.get("/snapshots/<int:snapshot_id>")

@@ -70,6 +70,37 @@ class NotFoundError(AppError):
         super().__init__(message, **kwargs)
 
 
+class ConflictError(AppError):
+    """Raised when a request would duplicate an existing resource."""
+
+    status_code = 409
+    code = "conflict"
+    # A rejected duplicate is an expected outcome, not a fault.
+    log_traceback = False
+
+    def __init__(self, message: str = "Resource already exists.", **kwargs: Any) -> None:
+        super().__init__(message, **kwargs)
+
+
+class RateLimitExceededError(AppError):
+    """Raised when a client exceeds its request quota."""
+
+    status_code = 429
+    code = "rate_limit_exceeded"
+    log_traceback = False
+
+    def __init__(
+        self, message: str = "Rate limit exceeded.", **kwargs: Any
+    ) -> None:
+        super().__init__(message, **kwargs)
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = super().to_dict()
+        # Acceptance criterion: the flag is readable at the top level.
+        payload["rate_limit_exceeded"] = True
+        return payload
+
+
 class ProviderNotConfiguredError(AppError):
     """Raised when a weather provider is requested but no credentials exist."""
 
