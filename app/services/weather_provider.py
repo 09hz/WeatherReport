@@ -1,17 +1,30 @@
-"""Weather provider interface and a minimal HTTP adapter.
+"""Weather provider interface and HTTP adapters.
 
-No provider is bundled or assumed. Until WEATHER_API_KEY and
-WEATHER_API_BASE_URL are both set to real values, `build_provider` returns a
-provider that refuses to run, so the application never emits fabricated
-observations and never makes outbound requests.
+Two kinds of backend live behind the `WeatherProvider` protocol:
+
+- The generic `HttpWeatherProvider`, which needs credentials. Until
+  WEATHER_API_KEY and WEATHER_API_BASE_URL are both set to real values,
+  `build_provider` returns a provider that refuses to run, so the
+  application never emits fabricated observations and never makes an
+  outbound request on this route.
+- The keyless NWS provider, selected with WEATHER_PROVIDER=nws. It needs no
+  credentials and therefore DOES make outbound requests to api.weather.gov
+  as soon as it is selected. Choosing it is the opt-in; there is no key to
+  withhold. Outbound traffic is confined to api.weather.gov by the
+  `ensure_nws_url` guard.
+
+In neither case is an observation ever fabricated.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Mapping, Protocol, runtime_checkable
 
 from ..errors import ProviderError, ProviderNotConfiguredError
+
+logger = logging.getLogger(__name__)
 
 
 @runtime_checkable
@@ -144,16 +157,46 @@ _NWS_UA_PLACEHOLDER = "your_app_name (your_contact_here)"
 
 
 def build_nws_provider(config: Mapping[str, Any]) -> WeatherProvider:
-    """Build the keyless NWS provider from Flask config."""
-    from .nws_provider import DEFAULT_BASE_URL, NwsWeatherProvider
+    """Build the keyless NWS provider from Flask config.
+
+    A hostile or unusable NWS_BASE_URL must not stop the app from booting.
+    app/config.py's contract is that bad configuration degrades to a safe
+    default, so the configured value is trust-checked here and discarded
+    with a warning when it fails. The hard ensure_nws_url check inside the
+    provider stays: URLs that arrive from outside (the ones NWS hands back
+    in its own payloads) are still rejected outright.
+    """
+    from .nws_provider import DEFAULT_BASE_URL, NwsWeatherProvider, ensure_nws_url
 
     user_agent = str(config.get("NWS_USER_AGENT") or "")
     if user_agent.strip().lower() == _NWS_UA_PLACEHOLDER:
         user_agent = ""  # unedited .env.example value: use the generic default
+
+    configured = str(config.get("NWS_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
+    try:
+        base_url = ensure_nws_url(configured)
+    except ProviderError as exc:
+        logger.warning(
+            "Ignoring NWS_BASE_URL=%r (%s); falling back to %s.",
+            configured,
+            (exc.details or {}).get("reason", "rejected"),
+            DEFAULT_BASE_URL,
+        )
+        base_url = DEFAULT_BASE_URL
+
+    try:
+        timeout = int(config.get("NWS_TIMEOUT_SECONDS", 10))
+    except (TypeError, ValueError):
+        logger.warning(
+            "Ignoring non-numeric NWS_TIMEOUT_SECONDS=%r; falling back to 10.",
+            config.get("NWS_TIMEOUT_SECONDS"),
+        )
+        timeout = 10
+
     return NwsWeatherProvider(
         user_agent=user_agent,
-        base_url=str(config.get("NWS_BASE_URL") or DEFAULT_BASE_URL),
-        timeout=int(config.get("NWS_TIMEOUT_SECONDS", 10)),
+        base_url=base_url,
+        timeout=timeout,
     )
 
 

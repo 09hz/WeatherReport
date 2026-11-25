@@ -26,6 +26,10 @@ _WEATHER_ENV_VARS = (
     "FLASK_ENV",
     "FLASK_DEBUG",
     "SECRET_KEY",
+    "WEATHER_PROVIDER",
+    "NWS_USER_AGENT",
+    "NWS_BASE_URL",
+    "NWS_TIMEOUT_SECONDS",
 )
 
 
@@ -34,12 +38,27 @@ def db_path(tmp_path: Path) -> Path:
     return tmp_path / "test_weather_journal.db"
 
 
-@pytest.fixture
-def clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.fixture(autouse=True)
+def _isolate_weather_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Scrub provider configuration from the environment for EVERY test.
+
+    Autouse on purpose. Scrubbing only inside `clean_env` left the tests that
+    build a `Config()` directly (rather than through the `app` fixture)
+    reading the developer's shell, so `WEATHER_PROVIDER=nws` in an
+    interactive session turned a green suite red. Isolation must not be
+    opt-in. A test that wants one of these variables set still sets it with
+    monkeypatch, which runs after this fixture.
+    """
     for name in _WEATHER_ENV_VARS:
         monkeypatch.delenv(name, raising=False)
     # Prevent a developer's local .env from leaking into the test run.
     monkeypatch.setattr("app._load_dotenv", lambda: None, raising=False)
+
+
+@pytest.fixture
+def clean_env(_isolate_weather_env) -> None:
+    """Kept for explicitness where a test documents its env isolation."""
+    return None
 
 
 @pytest.fixture

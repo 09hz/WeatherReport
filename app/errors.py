@@ -28,6 +28,7 @@ class AppError(Exception):
         details: dict[str, Any] | None = None,
         status_code: int | None = None,
         code: str | None = None,
+        log_traceback: bool | None = None,
     ) -> None:
         super().__init__(message)
         self.message = message
@@ -36,6 +37,10 @@ class AppError(Exception):
             self.status_code = status_code
         if code is not None:
             self.code = code
+        if log_traceback is not None:
+            # Lets a caller mark one instance as expected (e.g. upstream 4xx
+            # noise) without inventing a subclass per condition.
+            self.log_traceback = log_traceback
 
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {"code": self.code, "message": self.message}

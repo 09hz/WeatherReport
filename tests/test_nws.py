@@ -374,22 +374,29 @@ def test_zero_stations_is_a_provider_error():
 
 
 @pytest.mark.parametrize(
-    "url",
+    ("url", "reason"),
     [
-        "https://evil.example/gridpoints/TOP/32,81/stations",
-        "http://api.weather.gov/gridpoints/TOP/32,81/stations",
-        "https://api.weather.gov.evil.example/stations",
-        "https://user@api.weather.gov/stations",
-        "https://api.weather.gov:8443/stations",
-        "file:///etc/passwd",
-        None,
+        ("https://evil.example/gridpoints/TOP/32,81/stations", "untrusted_url"),
+        ("http://api.weather.gov/gridpoints/TOP/32,81/stations", "untrusted_url"),
+        ("https://api.weather.gov.evil.example/stations", "untrusted_url"),
+        ("https://user@api.weather.gov/stations", "untrusted_url"),
+        ("https://api.weather.gov:8443/stations", "untrusted_url"),
+        ("file:///etc/passwd", "untrusted_url"),
+        (None, "invalid_url"),
     ],
 )
-def test_ssrf_guard_rejects_untrusted_observation_stations_url(url):
+def test_ssrf_guard_rejects_untrusted_observation_stations_url(url, reason):
+    """Assert the REASON, not just the type.
+
+    `ProviderError` is raised for ordinary upstream failures too, so checking
+    only the exception type would still pass if the guard stopped running and
+    the request failed for some unrelated reason.
+    """
     routes = {POINT_URL: _FakeResponse(_point_payload(url))}
     provider, session = _provider(routes)
-    with pytest.raises(ProviderError):
+    with pytest.raises(ProviderError) as excinfo:
         provider.fetch_observation(LAT, LON)
+    assert excinfo.value.details["reason"] == reason
     assert session.urls() == [POINT_URL]
 
 

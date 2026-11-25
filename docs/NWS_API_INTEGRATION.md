@@ -19,9 +19,17 @@ The provider makes three sequential API calls in order:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `NWS_USER_AGENT` | Descriptive identifier for your app (required by NWS) | `WeatherReport/0.1 (set NWS_USER_AGENT with a contact)` |
-| `NWS_BASE_URL` | Base URL for NWS API requests | `https://api.weather.gov` |
-| `NWS_TIMEOUT_SECONDS` | Request timeout in seconds | falls back to `WEATHER_TIMEOUT_SECONDS`, else `10` |
+| `NWS_BASE_URL` | Base URL for NWS API requests. Must be an `https://api.weather.gov` URL with no port; any other value is ignored with a logged warning and the default is used, so bad configuration never blocks startup | `https://api.weather.gov` |
+| `NWS_TIMEOUT_SECONDS` | Request timeout in seconds. A non-numeric value is ignored with a logged warning and falls back to `10` | falls back to `WEATHER_TIMEOUT_SECONDS`, else `10` |
 | `WEATHER_PROVIDER` | Explicit provider selection; empty uses legacy behavior | (empty string) |
+
+Note that `NWS_BASE_URL` cannot be pointed at a local stub. The SSRF guard
+(`ensure_nws_url`) allows only `https://api.weather.gov`, and that restriction
+applies to the configured base URL as well as to every URL the API hands back.
+Configuration is merely lenient about a rejected value — it warns and reverts to
+the default instead of raising at startup. To exercise the provider against a
+fake backend, inject a session: `NwsWeatherProvider(session=fake)`, the pattern
+used throughout `tests/test_nws.py`.
 
 ## Request flow
 
@@ -43,7 +51,14 @@ The `NwsWeatherProvider.fetch_observation(lat, lon)` method executes the followi
 
 Returns JSON with a `data` object containing the normalized observation. The
 internal `raw_response` field is stripped by the route, so it never appears in
-the API response. The example below is a real reading from KTOP (Topeka):
+the API response.
+
+The example below is **illustrative, not a captured response**. Its shape and
+types are accurate, but do not treat the values as a recorded reading from any
+particular station. Note that every numeric measurement is a JSON float, so
+`wind_direction_deg`, `barometric_pressure_pa` and `visibility_m` render with a
+decimal point even when the upstream value is a whole number -- `_number()`
+casts to `float` unconditionally.
 
 ```json
 {
@@ -61,9 +76,9 @@ the API response. The example below is a real reading from KTOP (Topeka):
     "wind_speed_mph": 6.91,
     "wind_gust_kph": null,
     "wind_gust_mph": null,
-    "wind_direction_deg": 180,
-    "barometric_pressure_pa": 101800,
-    "visibility_m": 16090,
+    "wind_direction_deg": 180.0,
+    "barometric_pressure_pa": 101800.0,
+    "visibility_m": 16090.0,
     "description": "Clear",
     "conditions": "Clear",
     "source": "api.weather.gov",
@@ -72,6 +87,49 @@ the API response. The example below is a real reading from KTOP (Topeka):
   }
 }
 ```
+
+`observed_at` is nullable. A station that reports measurements without a
+timestamp is still returned, with `observed_at` set to `null`; only a payload
+carrying no measurements at all is rejected.
+
+Values already in canonical units (`degC`, `km_h-1`) are passed through
+exactly as NWS sent them. Values needing conversion (`degF`, `m_s-1`) are
+rounded to two decimals once, at output, and the paired `_f`/`_mph` field is
+derived from the full-precision figure -- so a reading round-trips to the
+number NWS actually reported.
+
+## Failure handling
+
+Station failover tries at most three nearby stations for a single point lookup.
+Failures fall into two modes. Recoverable failures — an HTTP error status, a
+non-JSON or non-object response body, a connection-level failure such as a
+reset, a missing timestamp, or no usable measurement — skip that station and try
+the next one. Unskippable failures — a timeout (the request chain is already over
+its latency budget) and a URL that fails the trust check (it must never be
+retried elsewhere) — abort the whole request immediately. Exhausting every
+candidate yields `nws_no_observation` with HTTP 502, whose details carry
+`stations_tried`, `last_failure` and `last_upstream_status`.
+
+| Failure | Behaviour |
+|---|---|
+| HTTP error status, non-JSON/non-object body, connection failure, missing timestamp, no usable measurement | Skip this station, try the next one |
+| Timeout, untrusted URL | Abort immediately, no retry |
+
+The upstream HTTP status is mapped using the *kind* of request being made
+(point, stations, observation), not the problem-type string in the response
+body, because NWS does not guarantee a JSON problem body.
+
+| Upstream condition | Request kind | HTTP status | Error code |
+|---|---|---|---|
+| 404 (no coverage for this point) | point | 404 | `nws_point_unavailable` |
+| 400 (coordinates rejected) | point | 400 | `nws_invalid_point` |
+| Any other status | point / stations / observation | 502 | `weather_provider_error` |
+| Timeout | any | 504 | `weather_provider_timeout` |
+
+All of these are expected conditions and deliberately do **not** write a stack
+trace to the log: the endpoint is unauthenticated, so traceback volume would
+otherwise be driven by the caller. Error details always include `reason`,
+`upstream_status` and `request_kind`.
 
 ## Limitations
 
