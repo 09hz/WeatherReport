@@ -56,6 +56,10 @@
   <section class="panel">
     <h2 class="panel__title">Entries</h2>
     <div class="panel__body">
+      {# Seven columns do not fit a narrow viewport. The wrapper is focusable
+         and labelled so the overflow is reachable without a pointer. #}
+      <div class="table-scroll" tabindex="0" role="region"
+           aria-label="Journal entries table">
       <table class="table">
         <caption class="visually-hidden">Journal entries</caption>
         <thead class="table__head">
@@ -66,7 +70,7 @@
             <th class="table__cell" scope="col">Location</th>
             <th class="table__cell" scope="col">Description</th>
             <th class="table__cell table__cell--numeric" scope="col">Snapshot</th>
-            <th class="table__cell" scope="col">Actions</th>
+            <th class="table__cell table__cell--actions" scope="col">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -90,7 +94,7 @@
                   <span class="placeholder">—<span class="visually-hidden">no value</span></span>
                 {% endif %}
               </td>
-              <td class="table__cell">
+              <td class="table__cell table__cell--actions">
                 <a class="btn btn--quiet"
                    href="{{ url_for('ui.journal_edit', entry_id=entry.id) }}">Edit</a>
                 <a class="btn btn--danger"
@@ -110,6 +114,7 @@
           {% endfor %}
         </tbody>
       </table>
+      </div>
 
       {% if page %}
         <div class="pager">

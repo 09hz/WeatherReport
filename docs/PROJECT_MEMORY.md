@@ -113,13 +113,32 @@ after the fact; it was the thing that let three authors agree without talking.
   evidence. Two of its tests failed first against the real code and were fixed
   rather than the code — that is how the unique `(date, location)` rule was
   discovered, and it became the 409 conflict test.
+- **When the contract changes on purpose, the old test is the thing that is
+  wrong.** Moving the 409 conflict from a page notice into `form__error` broke
+  a passing test of mine. Both workers spotted it, refused to edit a test they
+  did not own, and escalated — correct behaviour. The fix was to update the
+  assertion *and strengthen it* (it now also proves the error is not a page
+  notice and sits inside the form), never to relax it.
+- **Guardrails get tested by use, not by inspection.** The first real run of
+  `scripts/delegate_ui_worker.sh` found two defects in the dispatcher itself:
+  it denied the workers' own `pytest` (only the absolute interpreter path was
+  granted), and it cried VIOLATION over `.beads/issues.jsonl` when the real
+  cause was bd's deferred export of *my own* `bd update`. A guard that blocks
+  the work it demands, or that cries wolf, gets switched off — so both are now
+  asserted in `tests/test_delegation_guardrails.py`.
 - A worker's self-report is a claim about itself. Re-run the suite and read
   the diff yourself. Also check the *guarded* files really are untouched
   (`md5sum` before and after is enough).
 - Workers do not reliably stay inside their mandate: one closed its own Beads
   issue despite being told not to, while two others declined for the right
   reason. `.beads/issues.jsonl` is shared state and concurrent exports corrupt
-  it, so the tracker belongs to the orchestrator alone. Filed as UI-7.
+  it, so the tracker belongs to the orchestrator alone. **Prose is advice;
+  tool policy is enforcement** — delegate through
+  `scripts/delegate_ui_worker.sh`, which denies `bd` and every
+  state-changing `git` subcommand outright, hashes the shared files before and
+  after, and reports a modification as that worker's failure.
+  `tests/test_delegation_guardrails.py` asserts the policy so a later edit
+  cannot quietly re-open the hole.
 - The local 4B model's draft was structurally reusable and factually not:
   it inlined an entire document it should have linked, and misattributed a
   rationale. Delegate the skeleton, write the facts yourself.

@@ -58,11 +58,13 @@ CSS): black / white / grey only, no transitions, no animations, no
 | `datagrid__key` | `<dt>` — the field label. |
 | `datagrid__value` | `<dd>` — the field value. |
 | `datagrid__value--null` | `<dd>` whose underlying API value was `null`. Pairs with the `placeholder` text. |
-| `table` | `<table>` of many records. Always has a `<caption>` or a preceding `panel__title`. |
+| `table-scroll` | Wrapper `<div>` around a wide `table`. Becomes a horizontal scroll region at narrow widths so a many-column table degrades to scrolling rather than to unreadably wrapped cells. Must be focusable and labelled, or a keyboard user cannot reach the overflow. |
+| `table` | `<table>` of many records. Always has a `<caption>` or a preceding `panel__title`. `<tbody>` stays deliberately unclassed — there is no `table__body`, because a bare element selector is enough and an empty hook invites drift. |
 | `table__head` | `<thead>`. |
 | `table__row` | `<tr>` in the body. |
 | `table__cell` | `<td>` / `<th>`. |
 | `table__cell--numeric` | Right-aligned numeric cell. |
+| `table__cell--actions` | Cell holding per-row controls (edit, delete). Shrinks to its content and never wraps its buttons. |
 | `table__empty` | The single cell shown when a result set is empty. |
 | `placeholder` | Inline span for a missing value. The TEMPLATE owns the glyph: `helpers.present()` supplies the em dash as data and the template prints it inside the span, followed by a `visually-hidden` "no value". The stylesheet must NOT add it via `::before`, or it doubles. **Never** render `None` or an empty cell. |
 | `mono` | Force monospace on a fragment (IDs, coordinates, timestamps). |
@@ -73,6 +75,7 @@ CSS): black / white / grey only, no transitions, no animations, no
 | Class | Semantics |
 |---|---|
 | `form` | `<form>`. |
+| `form__error` | A failure that belongs to the whole form rather than to one control: a uniqueness conflict, a cross-field rule, a write that failed after validation passed. Rendered INSIDE the form, above the first field, so the message sits where the reader's attention already is. Use `notice--error` only for a failure that is not about a form at all. |
 | `field` | Wrapper for one label + control + optional hint/error. |
 | `field--invalid` | `field` whose control failed validation. |
 | `field__label` | `<label>`. |
@@ -85,6 +88,7 @@ CSS): black / white / grey only, no transitions, no animations, no
 | `btn--primary` | The one affirmative action of a form. |
 | `btn--danger` | Destructive action (delete). |
 | `btn--quiet` | Secondary / cancel action. |
+| `btn--disabled` | A control that is present but inert. Carry it TOGETHER with the real mechanism — `disabled` on a `<button>`, `aria-disabled="true"` plus no `href` on an `<a>` — because a class alone still lets a keyboard activate the control. |
 
 ## Messages
 
@@ -104,7 +108,7 @@ CSS): black / white / grey only, no transitions, no animations, no
 | `pager` | Wrapper for the limit/offset controls of a list. |
 | `pager__status` | `showing X–Y of TOTAL` text. Driven by the API's `total_count`. |
 | `pager__link` | Previous/next link. |
-| `pager__link--disabled` | Rendered when `offset == 0` or `has_more` is false. Must not be clickable. |
+| `pager__link--disabled` | Rendered when `offset == 0` or `has_more` is false. Must not be clickable, so the inert end is a `<span>` carrying both classes, never an `<a>` with a dead `href`. |
 
 ## Accessibility helpers
 

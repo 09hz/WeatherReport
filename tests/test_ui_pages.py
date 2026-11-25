@@ -365,12 +365,30 @@ def test_a_rejected_create_writes_nothing(client, connection):
 
 
 def test_duplicate_date_and_location_renders_the_conflict(client, connection):
-    """create_entry raises ConflictError (409) for a repeated (date, location)."""
+    """create_entry raises ConflictError (409) for a repeated (date, location).
+
+    The contract moved form-level failures inside the form: a conflict is not
+    attributable to one control, but it IS about this form, so it renders as
+    `.form__error` above the first field rather than as a page-level notice.
+    This test asserted `notice--error` before UI-6 and was updated with the
+    contract, not relaxed — the status code, the message and the write count
+    are all still asserted.
+    """
     make_entry(connection, entry_date=FORM["date"], location=FORM["location"])
 
     response = client.post("/ui/journal/new", data=FORM)
     assert response.status_code == 409
     body = html(response)
-    assert "notice--error" in body
+    assert "form__error" in body
+    assert "notice--error" not in body, "a form failure must not become a page notice"
     assert "already exists" in body
+    # the message belongs inside the form, not above it
+    assert body.index('class="form"') < body.index("form__error")
     assert journal_service.count_entries(connection) == 1
+
+
+def test_a_field_failure_stays_on_the_field_and_not_in_the_form_error(client):
+    """The two error regions must not collapse into one."""
+    body = html(client.post("/ui/journal/new", data={**FORM, "date": "nope"}))
+    assert "field--invalid" in body
+    assert "form__error" not in body

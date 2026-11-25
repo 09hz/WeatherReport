@@ -184,6 +184,16 @@ def _render_form(
     entry_id: int | None = None,
 ):
     editing = entry_id is not None
+    errors = field_errors(error)
+    # A failure the API pinned to one control is that control's error. Anything
+    # else that reaches this page belongs to the form as a whole — a duplicate
+    # (date, location), a write that failed after validation passed — so it is
+    # rendered as .form__error inside the form, not as a page .notice--error.
+    # Failures that are not about this form at all (a vanished entry) are sent
+    # to _render_list, which still uses a notice.
+    form_error = (
+        notice_from_error(error) if error is not None and not errors else None
+    )
     return (
         render_template(
             "ui/journal_form.html",
@@ -197,8 +207,8 @@ def _render_form(
                 else url_for("ui.journal_new")
             ),
             values=values,
-            errors=field_errors(error),
-            notice=notice_from_error(error) if error is not None else None,
+            errors=errors,
+            form_error=form_error,
         ),
         error.status_code if error is not None else 200,
     )

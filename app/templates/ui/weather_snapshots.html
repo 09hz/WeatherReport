@@ -69,6 +69,10 @@
       {% if location %}<span class="tag mono">{{ location }}</span>{% endif %}
     </h2>
     <div class="panel__body">
+      {# A snapshot has more columns than a phone has width. The wrapper is
+         focusable and labelled so the overflow is reachable by keyboard. #}
+      <div class="table-scroll" tabindex="0" role="region"
+           aria-label="Stored weather snapshots table">
       <table class="table">
         <caption class="visually-hidden">Stored weather snapshots</caption>
         <thead class="table__head">
@@ -101,6 +105,7 @@
           {% endfor %}
         </tbody>
       </table>
+      </div>
     </div>
   </section>
 

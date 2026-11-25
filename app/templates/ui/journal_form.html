@@ -4,7 +4,15 @@
   which fields or limits they offer.
 
   Context: editing, entry_id, action, values (always all form keys, always
-  strings), errors ({field: message}, at most one entry), notice.
+  strings), errors ({field: message}, at most one entry), form_error.
+
+  form_error is a failure that belongs to the whole form rather than to one
+  control — a duplicate (date, location), or a write that failed after
+  validation passed. The contract puts it INSIDE the form above the first
+  field, not in a page-level .notice--error: the reader's attention is already
+  on the form they just submitted. Failures that are not about this form (a
+  missing entry, a bad query string) are rendered by journal_list.html as a
+  notice instead, which is why this template has no notice block at all.
 #}
 {% extends "base.html" %}
 {% block title %}{{ 'Edit entry' if editing else 'New entry' }}{% endblock %}
@@ -21,21 +29,21 @@
     {% endif %}
   </p>
 
-  {% if notice %}
-    <div class="notice notice--error">
-      <p class="notice__title">{{ notice.title }}</p>
-      {% if notice.details %}
-        <ul class="notice__detail">
-          {% for detail in notice.details %}<li>{{ detail }}</li>{% endfor %}
-        </ul>
-      {% endif %}
-    </div>
-  {% endif %}
-
   <section class="panel">
     <h2 class="panel__title">{{ 'Entry' if editing else 'New entry' }}</h2>
     <div class="panel__body">
       <form class="form" method="post" action="{{ action }}">
+        {% if form_error %}
+          <div class="form__error" role="alert">
+            <p>{{ form_error.title }}</p>
+            {% if form_error.details %}
+              <ul>
+                {% for detail in form_error.details %}<li>{{ detail }}</li>{% endfor %}
+              </ul>
+            {% endif %}
+          </div>
+        {% endif %}
+
         <div class="stack">
           <div class="field{% if errors.title %} field--invalid{% endif %}">
             <label class="field__label" for="title">Title</label>
