@@ -1,0 +1,918 @@
+/* ===========================================================================
+ * brutalist.css — WeatherReport UI-1 (WeatherReport-ic2)
+ *
+ * Implements every class in docs/UI_CLASS_CONTRACT.md. Section headers below
+ * name the contract section they implement, in contract order.
+ *
+ * DESIGN BASIS (researched, not invented)
+ * ---------------------------------------
+ * Web brutalism proper, not "neo-brutalism". The difference matters here: the
+ * neo- variant is defined by saturated flat fills and hard offset shadows,
+ * both of which the product owner forbids. So the vocabulary is taken from
+ * brutalist-web.design (D. B. Copeland) and from the classic monochrome
+ * brutalist stylesheets:
+ *
+ *   - left-aligned black text on white paper, styling added only to solve a
+ *     stated problem (Copeland, closing advice);
+ *   - raw document structure left visible: borders are the whole decoration
+ *     vocabulary, and they are drawn at weights you cannot mistake for a
+ *     hairline accident (1 / 2 / 4 / 8 px, the ladder the brutalist
+ *     frameworks converge on);
+ *   - hyperlinks stay underlined, buttons keep a pressable box, form controls
+ *     keep their native affordances (Copeland, principles 2 and 3);
+ *   - content is read by scrolling, legibly, on any reasonable screen
+ *     (principles 1 and 5) — hence mobile-first with one plain breakpoint;
+ *   - exposed grid: the gutters of a .grid are a black field showing through
+ *     between cells, so the layout frame is visible rather than implied;
+ *   - machine type. Body text is a system monospace stack: this is the face of
+ *     a JSON API and the UI should not pretend otherwise. Headings switch to
+ *     the system grotesque, uppercase and tightly tracked, for the oversized
+ *     display scale brutalism depends on. No webfont, no network request.
+ *
+ * ENFORCED CONSTRAINTS
+ * --------------------
+ * Greyscale only (every colour below has equal R/G/B); no motion of any kind;
+ * no softening of any edge; no external resource of any kind. Because colour
+ * is unavailable, STATE IS CARRIED BY WEIGHT, INVERSION AND TYPE: border
+ * weight for severity, black/white inversion for emphasis and for focus,
+ * uppercase for structural labels.
+ *
+ * All values are tokens in :root. Retune the system there, not in the rules.
+ * ========================================================================= */
+
+:root {
+  /* Greyscale ramp — the entire palette. Neutral by construction. */
+  --ink:        #000000;
+  --ink-soft:   #1a1a1a;
+  --grey-700:   #3d3d3d;
+  --grey-500:   #6b6b6b;
+  --grey-400:   #8c8c8c;
+  --grey-300:   #b8b8b8;
+  --grey-200:   #d8d8d8;
+  --grey-100:   #ececec;
+  --grey-050:   #f6f6f6;
+  --paper:      #ffffff;
+
+  /* Border weights. The only decoration this system has. */
+  --rule-hair:  1px;   /* data separators inside a container        */
+  --rule:       2px;   /* ordinary container edge                   */
+  --rule-heavy: 4px;   /* structural edge: panels, buttons, bands   */
+  --rule-slab:  8px;   /* shouting: masthead underline, severity    */
+
+  /* Spacing. One step; everything is a multiple of it. */
+  --space-unit: 0.25rem;
+  --space-1: calc(var(--space-unit) * 1);   /*  4px */
+  --space-2: calc(var(--space-unit) * 2);   /*  8px */
+  --space-3: calc(var(--space-unit) * 3);   /* 12px */
+  --space-4: calc(var(--space-unit) * 4);   /* 16px */
+  --space-6: calc(var(--space-unit) * 6);   /* 24px */
+  --space-8: calc(var(--space-unit) * 8);   /* 32px */
+  --space-12: calc(var(--space-unit) * 12); /* 48px */
+
+  /* Type scale, ~1.25 modular, base 1rem. */
+  --type-00: 0.75rem;
+  --type-0:  0.875rem;
+  --type-1:  1rem;
+  --type-2:  1.125rem;
+  --type-3:  1.375rem;
+  --type-4:  1.75rem;
+  --type-5:  2.25rem;
+  --type-6:  3rem;
+
+  --leading-tight: 1.1;
+  --leading-text:  1.5;
+
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+               "DejaVu Sans Mono", monospace;
+  --font-display: system-ui, -apple-system, "Segoe UI", Roboto,
+                  "Helvetica Neue", Arial, sans-serif;
+
+  /* Keyboard focus. Colour cannot signal it, so weight and inversion do. */
+  --focus-width: 3px;
+  --focus-offset: 2px;
+
+  /* Layout limits: legible at 400px, not a 1600px-wide line of text. */
+  --shell-max: 84rem;
+  --measure: 76ch;
+}
+
+/* --- document defaults ---------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--paper);
+  /* 400px floor: never let a long token force a sideways scroll. */
+  overflow-wrap: break-word;
+}
+
+/* ===========================================================================
+ * CONTRACT: Document shell
+ * ========================================================================= */
+
+.page {
+  margin: 0;
+  padding: 0;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: var(--font-mono);
+  font-size: var(--type-1);
+  line-height: var(--leading-text);
+  text-align: left;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Native affordances kept: links stay underlined, everywhere. */
+.page a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-thickness: var(--rule-hair);
+  text-underline-offset: 0.15em;
+}
+
+.page a:hover {
+  background: var(--ink);
+  color: var(--paper);
+  text-decoration: none;
+}
+
+/* Single focus rule for everything interactive. Inverted block + ring, so it
+ * survives on white paper, on grey fills and inside inverted blocks alike. */
+.page a:focus-visible,
+.page button:focus-visible,
+.page input:focus-visible,
+.page select:focus-visible,
+.page textarea:focus-visible,
+.page summary:focus-visible,
+.page [tabindex]:focus-visible {
+  outline: var(--focus-width) solid var(--ink);
+  outline-offset: var(--focus-offset);
+  background: var(--ink);
+  color: var(--paper);
+  text-decoration: none;
+}
+
+/* Fallback for engines without :focus-visible. */
+.page a:focus,
+.page button:focus,
+.page summary:focus {
+  outline: var(--focus-width) solid var(--ink);
+  outline-offset: var(--focus-offset);
+}
+
+.page h1,
+.page h2,
+.page h3,
+.page h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  letter-spacing: -0.015em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.page p,
+.page ul,
+.page ol {
+  margin: 0 0 var(--space-3);
+}
+
+.page p:last-child,
+.page ul:last-child,
+.page ol:last-child {
+  margin-bottom: 0;
+}
+
+/* Keyboard jump target. Off-screen until focused, then a slab at top-left. */
+.skip-link {
+  position: absolute;
+  left: -100vw;
+  top: 0;
+  z-index: 10;
+  padding: var(--space-2) var(--space-4);
+  border: var(--rule-heavy) solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--type-0);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  position: static;
+  left: auto;
+  display: block;
+  width: 100%;
+  background: var(--ink);
+  color: var(--paper);
+  outline-offset: calc(var(--focus-offset) * -1 - var(--focus-width));
+}
+
+.masthead {
+  padding: var(--space-4);
+  border-bottom: var(--rule-slab) solid var(--ink);
+}
+
+.masthead__title {
+  display: inline-block;
+  font-family: var(--font-display);
+  font-size: var(--type-4);
+  font-weight: 700;
+  line-height: var(--leading-tight);
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+
+.masthead__title:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.masthead__tagline {
+  margin: var(--space-2) 0 0;
+  color: var(--grey-700);
+  font-size: var(--type-0);
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  border-bottom: var(--rule-heavy) solid var(--ink);
+  background: var(--grey-050);
+}
+
+.nav__link {
+  padding: var(--space-3) var(--space-4);
+  border-right: var(--rule) solid var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--type-0);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+}
+
+.nav__link:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* Current section: permanently inverted, so it reads without colour. */
+.nav__link--active {
+  background: var(--ink);
+  color: var(--paper);
+  text-decoration: none;
+}
+
+.main {
+  display: block;
+  max-width: var(--shell-max);
+  padding: var(--space-6) var(--space-4) var(--space-12);
+}
+
+.footer {
+  max-width: var(--shell-max);
+  padding: var(--space-4);
+  border-top: var(--rule-heavy) solid var(--ink);
+  color: var(--grey-700);
+  font-size: var(--type-0);
+}
+
+/* ===========================================================================
+ * CONTRACT: Page structure
+ * ========================================================================= */
+
+.view {
+  display: block;
+}
+
+/* The one place the display scale is allowed to shout. */
+.view__title {
+  margin: 0 0 var(--space-4);
+  padding-bottom: var(--space-3);
+  border-bottom: var(--rule-slab) solid var(--ink);
+  font-size: var(--type-5);
+}
+
+.view__lead {
+  max-width: var(--measure);
+  margin: 0 0 var(--space-6);
+  font-size: var(--type-2);
+  color: var(--ink-soft);
+}
+
+/* Vertical rhythm between a view's top-level blocks. */
+.view > * + * {
+  margin-top: var(--space-6);
+}
+
+.view > .view__title + * {
+  margin-top: 0;
+}
+
+.panel {
+  margin: 0;
+  border: var(--rule-heavy) solid var(--ink);
+  background: var(--paper);
+}
+
+/* Header bar, inverted: a panel announces itself before its content. */
+.panel__title {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: var(--rule-heavy) solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font-size: var(--type-1);
+  letter-spacing: 0.06em;
+}
+
+.panel__body {
+  padding: var(--space-4);
+}
+
+/* Margin-only vertical flow, per contract. */
+.stack > * {
+  margin-bottom: 0;
+}
+
+.stack > * + * {
+  margin-top: var(--space-4);
+}
+
+/* Exposed grid: the black field shows through the gutters as structural rule.
+ * One column by default — the 400px case needs no media query. */
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--rule-heavy);
+  background: var(--ink);
+  border: var(--rule-heavy) solid var(--ink);
+}
+
+.grid > * {
+  margin: 0;
+  background: var(--paper);
+}
+
+/* Cells already sit inside the grid's own frame; drop their outer border so
+ * the exposed rule stays one weight, not two stacked. */
+.grid > .panel {
+  border: 0;
+}
+
+.grid > .panel > .panel__title {
+  border-bottom-width: var(--rule-heavy);
+}
+
+/* ===========================================================================
+ * CONTRACT: Data display
+ * ========================================================================= */
+
+/* Stacked label/value at narrow widths, two columns from the breakpoint. */
+.datagrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  margin: 0;
+  border-top: var(--rule) solid var(--ink);
+}
+
+.datagrid__key {
+  padding: var(--space-2) var(--space-2) 0;
+  background: var(--grey-100);
+  font-size: var(--type-00);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.datagrid__value {
+  margin: 0;
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  border-bottom: var(--rule-hair) solid var(--ink);
+  background: var(--grey-100);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A null measurement is visibly absent, never blank. */
+.datagrid__value--null {
+  color: var(--grey-500);
+  background: var(--grey-050);
+}
+
+.table {
+  width: 100%;
+  margin: 0;
+  border: var(--rule) solid var(--ink);
+  border-collapse: collapse;
+  font-size: var(--type-0);
+  font-variant-numeric: tabular-nums;
+}
+
+.table caption {
+  padding: var(--space-2);
+  border-bottom: var(--rule) solid var(--ink);
+  background: var(--grey-100);
+  font-family: var(--font-display);
+  font-size: var(--type-00);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-align: left;
+}
+
+.table__head {
+  border-bottom: var(--rule-heavy) solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.table__head .table__cell {
+  font-family: var(--font-display);
+  font-size: var(--type-00);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  vertical-align: bottom;
+}
+
+.table__row {
+  border-top: var(--rule-hair) solid var(--ink);
+}
+
+/* Zebra by grey, since colour is unavailable — keeps long lists trackable. */
+.table__row:nth-child(even) {
+  background: var(--grey-050);
+}
+
+.table__cell {
+  padding: var(--space-2);
+  border-right: var(--rule-hair) solid var(--grey-300);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table__cell:last-child {
+  border-right: 0;
+}
+
+.table__cell--numeric {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.table__empty {
+  padding: var(--space-6) var(--space-2);
+  background: var(--grey-050);
+  color: var(--grey-500);
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  text-align: center;
+}
+
+/* Missing value. Grey, underscored, and never mistaken for a styling gap. */
+.placeholder {
+  color: var(--grey-500);
+  border-bottom: var(--rule-hair) solid var(--grey-400);
+  font-family: var(--font-mono);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95em;
+}
+
+.tag {
+  display: inline-block;
+  padding: 0 var(--space-1);
+  border: var(--rule) solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--type-00);
+  font-weight: 700;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+/* ===========================================================================
+ * CONTRACT: Forms
+ * ========================================================================= */
+
+.form {
+  margin: 0;
+  max-width: var(--measure);
+}
+
+.field {
+  display: block;
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-3);
+  border-left: var(--rule-heavy) solid var(--ink);
+}
+
+.field__label {
+  display: block;
+  margin-bottom: var(--space-1);
+  font-family: var(--font-display);
+  font-size: var(--type-00);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.field__input,
+.field__textarea {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  padding: var(--space-2);
+  border: var(--rule) solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--type-1);
+  line-height: var(--leading-text);
+}
+
+/* A control under the keyboard inverts and thickens: two signals, no colour.
+ * The global focus rule supplies the ring; this supplies the weight. */
+.field__input:focus,
+.field__textarea:focus {
+  border-width: var(--rule-heavy);
+  padding: calc(var(--space-2) - var(--rule));
+}
+
+.field__input:focus-visible,
+.field__textarea:focus-visible {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.field__input::placeholder,
+.field__textarea::placeholder {
+  color: var(--grey-400);
+}
+
+.field__textarea {
+  min-height: 8rem;
+  resize: vertical;
+}
+
+/* <select> arrives through .field__input; keep its native arrow. */
+select.field__input {
+  height: auto;
+}
+
+.field__hint {
+  margin: var(--space-1) 0 0;
+  color: var(--grey-700);
+  font-size: var(--type-0);
+}
+
+/* Invalid: the field's own left rule becomes a slab and the fill greys. */
+.field--invalid {
+  border-left-width: var(--rule-slab);
+  background: var(--grey-100);
+  padding-top: var(--space-2);
+  padding-bottom: var(--space-2);
+  padding-right: var(--space-2);
+}
+
+.field--invalid .field__input,
+.field--invalid .field__textarea {
+  border-width: var(--rule-heavy);
+  border-style: double;
+}
+
+.field__error {
+  margin: var(--space-1) 0 0;
+  font-size: var(--type-0);
+  font-weight: 700;
+}
+
+/* Text marker, because a red border is not available. */
+.field__error::before {
+  content: "!! ";
+  font-family: var(--font-mono);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: var(--rule) solid var(--ink);
+}
+
+/* Buttons look like buttons: a box with a heavy edge and a label in caps. */
+.btn {
+  display: inline-block;
+  margin: 0;
+  padding: var(--space-2) var(--space-4);
+  border: var(--rule-heavy) solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: var(--type-0);
+  font-weight: 700;
+  line-height: var(--leading-text);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: var(--ink);
+  color: var(--paper);
+  text-decoration: none;
+}
+
+.btn:active {
+  border-style: inset;
+}
+
+.btn--primary {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.btn--primary:hover {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* Destructive: double rule, so it is never the button you hit by reflex. */
+.btn--danger {
+  border-style: double;
+  border-width: var(--rule-slab);
+  padding: calc(var(--space-2) - var(--rule-heavy) + var(--rule))
+           calc(var(--space-4) - var(--rule-heavy) + var(--rule));
+  text-decoration: underline;
+  text-decoration-thickness: var(--rule);
+}
+
+.btn--danger:hover {
+  background: var(--ink);
+  color: var(--paper);
+  text-decoration: underline;
+}
+
+/* Secondary: recedes by weight and grey, not by hiding. */
+.btn--quiet {
+  border-width: var(--rule);
+  padding: calc(var(--space-2) + var(--rule)) calc(var(--space-4) + var(--rule));
+  background: var(--paper);
+  color: var(--grey-700);
+  font-weight: 400;
+}
+
+.btn--quiet:hover {
+  background: var(--grey-200);
+  color: var(--ink);
+}
+
+.btn[aria-disabled="true"],
+.btn:disabled {
+  border-color: var(--grey-400);
+  background: var(--grey-100);
+  color: var(--grey-500);
+  cursor: default;
+}
+
+/* ===========================================================================
+ * CONTRACT: Messages
+ * ========================================================================= */
+
+/* Severity ladder without colour: left-rule weight, then fill, then full
+ * inversion for the loudest state. */
+.notice {
+  margin: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: var(--rule) solid var(--ink);
+  border-left-width: var(--rule-heavy);
+  background: var(--paper);
+}
+
+.main .notice,
+.panel__body .notice {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.notice__title {
+  margin: 0 0 var(--space-1);
+  font-family: var(--font-display);
+  font-size: var(--type-1);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.notice__detail {
+  margin: 0;
+  font-size: var(--type-0);
+}
+
+.notice__detail li {
+  margin-left: var(--space-4);
+}
+
+.notice--ok {
+  border-left-width: var(--rule-heavy);
+  background: var(--grey-050);
+}
+
+.notice--ok .notice__title::before {
+  content: "OK / ";
+}
+
+.notice--warn {
+  border-left-width: var(--rule-slab);
+  background: var(--grey-100);
+}
+
+.notice--warn .notice__title::before {
+  content: "WARNING / ";
+}
+
+/* Failure: inverted slab. Impossible to scroll past. */
+.notice--error {
+  border: var(--rule-slab) solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+
+.notice--error .notice__title::before {
+  content: "ERROR / ";
+}
+
+.notice--error a {
+  color: var(--paper);
+}
+
+.notice--error a:hover,
+.notice--error a:focus-visible {
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* Keep the focus ring visible against an inverted block. */
+.notice--error a:focus-visible {
+  outline-color: var(--paper);
+}
+
+/* ===========================================================================
+ * CONTRACT: Pagination
+ * ========================================================================= */
+
+.pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: var(--rule) solid var(--ink);
+  font-size: var(--type-0);
+}
+
+.pager__status {
+  flex: 1 1 100%;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--grey-700);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pager__link {
+  display: inline-block;
+  padding: var(--space-1) var(--space-3);
+  border: var(--rule) solid var(--ink);
+  background: var(--paper);
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+}
+
+.pager__link:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* Disabled: greyed, un-hoverable, and not clickable even if rendered as <a>. */
+.pager__link--disabled {
+  border-color: var(--grey-400);
+  border-style: dashed;
+  background: var(--grey-050);
+  color: var(--grey-400);
+  cursor: default;
+  pointer-events: none;
+  text-decoration: none;
+}
+
+.pager__link--disabled:hover {
+  background: var(--grey-050);
+  color: var(--grey-400);
+}
+
+/* ===========================================================================
+ * CONTRACT: Accessibility helpers
+ * ========================================================================= */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ===========================================================================
+ * The one breakpoint. Mobile-first: everything above is the 400px layout;
+ * this is the 1600px layout. 48rem = 768px, the first width where two columns
+ * of monospace text still hold a readable measure.
+ * ========================================================================= */
+
+@media (min-width: 48rem) {
+  .masthead,
+  .nav,
+  .main,
+  .footer {
+    padding-left: var(--space-6);
+    padding-right: var(--space-6);
+  }
+
+  .masthead__title {
+    font-size: var(--type-5);
+  }
+
+  .view__title {
+    font-size: var(--type-6);
+  }
+
+  .grid--2 {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .grid--3 {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+
+  /* Label beside value once there is room for both. */
+  .datagrid {
+    grid-template-columns: minmax(10rem, max-content) 1fr;
+  }
+
+  .datagrid__key {
+    padding: var(--space-2);
+    border-bottom: var(--rule-hair) solid var(--ink);
+    border-right: var(--rule) solid var(--ink);
+  }
+
+  .datagrid__value {
+    padding: var(--space-2);
+  }
+
+  .pager__status {
+    flex: 1 1 auto;
+  }
+
+  .table {
+    font-size: var(--type-1);
+  }
+}
+
+/* Wide screens: centre the shell so a 1600px window does not produce a
+ * single 200-character line. */
+@media (min-width: 90rem) {
+  .main,
+  .footer {
+    margin-left: auto;
+    margin-right: auto;
+  }
+}

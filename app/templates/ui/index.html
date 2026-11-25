@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block content %}
+<div class="view">
+  <h1 class="view__title">Overview</h1>
+  <p class="view__lead">
+    Server-rendered front end for the weather &amp; journal API. No JavaScript,
+    no colour, no rounded corners.
+  </p>
+
+  <div class="grid grid--2">
+    <section class="panel">
+      <h2 class="panel__title">Weather</h2>
+      <div class="panel__body stack">
+        <p>Look up current conditions for a location and store a snapshot.</p>
+        <p>
+          <a class="btn" href="{{ url_for('ui.weather_current') }}">Current conditions</a>
+          <a class="btn btn--quiet" href="{{ url_for('ui.weather_snapshots') }}">Stored snapshots</a>
+        </p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel__title">Journal</h2>
+      <div class="panel__body stack">
+        <p>Dated entries, optionally attached to a stored weather snapshot.</p>
+        <p>
+          <a class="btn" href="{{ url_for('ui.journal_list') }}">Browse entries</a>
+        </p>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <h2 class="panel__title">Machine interface</h2>
+    <div class="panel__body">
+      <dl class="datagrid">
+        <dt class="datagrid__key">JSON index</dt>
+        <dd class="datagrid__value"><a class="mono" href="/">GET /</a></dd>
+        <dt class="datagrid__key">Health</dt>
+        <dd class="datagrid__value"><a class="mono" href="/health">GET /health</a></dd>
+        <dt class="datagrid__key">Rate limit</dt>
+        <dd class="datagrid__value"><a class="mono" href="/api/limits/status">GET /api/limits/status</a></dd>
+      </dl>
+    </div>
+  </section>
+</div>
+{% endblock %}

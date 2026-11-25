@@ -1,0 +1,70 @@
+{#
+  Journal delete confirmation (UI-3).
+
+  GET shows the record and an explicit confirm button; the deletion itself is
+  the POST, so no link and no page refresh can destroy an entry. A missing
+  entry arrives here as `notice` with `entry` unset — a NotFoundError is a
+  page-level .notice--error, not a traceback.
+
+  Context: entry_id, entry (may be None), rows (present() output), notice.
+#}
+{% extends "base.html" %}
+{% block title %}Delete entry{% endblock %}
+{% block content %}
+<div class="view">
+  <h1 class="view__title">Delete entry</h1>
+
+  {% if notice %}
+    <div class="notice notice--error">
+      <p class="notice__title">{{ notice.title }}</p>
+      {% if notice.details %}
+        <ul class="notice__detail">
+          {% for detail in notice.details %}<li>{{ detail }}</li>{% endfor %}
+        </ul>
+      {% endif %}
+    </div>
+  {% endif %}
+
+  {% if entry %}
+    <p class="view__lead">
+      This removes entry <span class="mono">#{{ entry_id }}</span> permanently.
+      There is no undo.
+    </p>
+
+    <section class="panel">
+      <h2 class="panel__title">{{ entry.title }}</h2>
+      <div class="panel__body">
+        <dl class="datagrid">
+          {% for row in rows %}
+            <dt class="datagrid__key">{{ row.key }}</dt>
+            <dd class="datagrid__value{% if row.is_null %} datagrid__value--null{% endif %}">
+              {% if row.is_null %}
+                <span class="placeholder">{{ row.value }}<span class="visually-hidden">no value</span></span>
+              {% else %}
+                {{ row.value }}
+              {% endif %}
+            </dd>
+          {% endfor %}
+        </dl>
+      </div>
+    </section>
+
+    <form class="form" method="post"
+          action="{{ url_for('ui.journal_delete', entry_id=entry_id) }}">
+      <div class="actions">
+        <button class="btn btn--danger" type="submit">Delete entry</button>
+        <a class="btn btn--quiet"
+           href="{{ url_for('ui.journal_edit', entry_id=entry_id) }}">Edit instead</a>
+        <a class="btn btn--quiet" href="{{ url_for('ui.journal_list') }}">Cancel</a>
+      </div>
+    </form>
+  {% else %}
+    <p class="view__lead">
+      Nothing was deleted. The entry may already be gone.
+    </p>
+    <p>
+      <a class="btn" href="{{ url_for('ui.journal_list') }}">Back to the journal</a>
+    </p>
+  {% endif %}
+</div>
+{% endblock %}

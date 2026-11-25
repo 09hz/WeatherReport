@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<div class="view">
+  <h1 class="view__title">{{ title }}</h1>
+  <div class="notice">
+    <p class="notice__title">Not built yet</p>
+    <p class="notice__detail">
+      This page is owned by <span class="mono">{{ issue }}</span>. The route and
+      the layout exist so the navigation is never broken while the page is in
+      progress.
+    </p>
+  </div>
+</div>
+{% endblock %}
