@@ -23,8 +23,15 @@ def test_app_starts_without_any_credentials(app):
     assert app.config["SECRET_KEY"]  # ephemeral key generated for dev/test
 
 
-def test_index_lists_endpoints(client):
+def test_root_redirects_to_the_ui(client):
+    """A browser hitting the bare domain must land on the UI, not JSON."""
     response = client.get("/")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/ui/")
+
+
+def test_api_index_lists_endpoints(client):
+    response = client.get("/api")
     assert response.status_code == 200
     assert response.get_json()["name"] == "weather-journal"
 

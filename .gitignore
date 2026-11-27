@@ -38,4 +38,11 @@ dist/
 tasks/
 .worktrees
 .vercel
-.env*
+# Added by `vercel link` as the broad glob `.env*`, which also matched
+# .env.example -- a TRACKED file that is meant to be committed. Narrowed to the
+# real secrets so new example/template files stay visible (WeatherReport-dho).
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.production.local

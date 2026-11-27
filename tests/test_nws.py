@@ -314,7 +314,7 @@ def test_observations_route_returns_normalized_data(app, client):
 
 
 def test_index_lists_observations_endpoint(client):
-    endpoints = client.get("/").get_json()["endpoints"]
+    endpoints = client.get("/api").get_json()["endpoints"]
     assert any("/api/weather/observations" in e for e in endpoints)
 
 

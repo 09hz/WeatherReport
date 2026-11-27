@@ -106,9 +106,10 @@ def test_page_renders_as_html(client, path):
     assert 'class="nav"' in body
 
 
-def test_root_is_still_json(client):
-    """The whole reason the UI is mounted at /ui."""
-    assert client.get("/").is_json
+def test_root_redirects_to_ui_and_api_stays_json(client):
+    """The UI owns /, so the JSON listing moved to /api."""
+    assert client.get("/").status_code == 302
+    assert client.get("/api").is_json
 
 
 # --------------------------------------------------------------------------- #
