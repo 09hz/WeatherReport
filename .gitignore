@@ -2,6 +2,8 @@
 .venv
 __pycache__
 .github
+.vercel
+.beads/logs
 
 # Environment / secrets
 .env
@@ -37,6 +39,8 @@ dist/
 # CEO and Local Task Files
 tasks/
 .worktrees
+
+
 .vercel
 # Added by `vercel link` as the broad glob `.env*`, which also matched
 # .env.example -- a TRACKED file that is meant to be committed. Narrowed to the
