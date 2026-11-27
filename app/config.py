@@ -177,6 +177,20 @@ class Config:
             "NWS_BASE_URL": self.nws_base_url,
             "NWS_TIMEOUT_SECONDS": self.nws_timeout_seconds,
             "NWS_TOTAL_TIMEOUT_SECONDS": self.nws_total_timeout_seconds,
+            # Everything below was defined on Config but never emitted here,
+            # so create_app's app.config.get(...) calls all fell back to None
+            # and these env vars did nothing in a real deployment: rate
+            # limiting was silently off despite defaulting to True, and the
+            # cache TTL/size overrides were ignored (WeatherReport-9vj).
+            # REQUEST_LOG_PATH is required whenever REQUEST_LOG_ENABLED is
+            # true -- request_log.py indexes it directly.
+            "WEATHER_CACHE_TTL_SECONDS": self.weather_cache_ttl_seconds,
+            "WEATHER_CACHE_MAX_ENTRIES": self.weather_cache_max_entries,
+            "REQUEST_LOG_ENABLED": self.request_log_enabled,
+            "REQUEST_LOG_PATH": str(self.resolved_request_log_path),
+            "RATE_LIMIT_ENABLED": self.rate_limit_enabled,
+            "RATE_LIMIT_REQUESTS": self.rate_limit_requests,
+            "RATE_LIMIT_WINDOW_SECONDS": self.rate_limit_window_seconds,
             "JSON_SORT_KEYS": False,
         }
 

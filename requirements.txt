@@ -1,4 +1,7 @@
 # Runtime
+# NOTE: these runtime pins are duplicated in pyproject.toml [project].dependencies,
+# which is what Vercel actually builds from (uv ignores this file when a
+# pyproject.toml exists -- see docs/VERCEL_DEPLOYMENT.md). Change both together.
 Flask>=3.0,<4.0
 python-dotenv>=1.0
 requests>=2.31

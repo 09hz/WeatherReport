@@ -29,8 +29,13 @@ dist/
 .dolt/
 .beads-credential-key
 .beads/proxieddb/
+# Request audit trail. REQUEST_LOG_ENABLED defaults to true, so a local run
+# writes this; it is per-machine runtime noise, never source (WeatherReport-9vj).
+.beads/logs/
 *.gate.lock*
 
 # CEO and Local Task Files
 tasks/
 .worktrees
+.vercel
+.env*

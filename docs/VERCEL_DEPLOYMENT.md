@@ -18,10 +18,44 @@ point the platform at it. `pyproject.toml`:
 entrypoint = "run:app"
 ```
 
-That file intentionally has **no `[project]` table**, so dependency resolution
-stays on `requirements.txt`. Adding one would make the build try to install
-this repo as a package, and setuptools auto-discovery fails on the flat
-`app/ tests/ scripts/ src/` layout.
+## Dependencies: pyproject.toml is the deploy manifest, NOT requirements.txt
+
+This file previously claimed the opposite, and that mistake took production
+down (WeatherReport-4u0). **Whenever a `pyproject.toml` exists, Vercel's Python
+builder resolves dependencies from it with `uv`, and `requirements.txt` is
+ignored.** The build log says so directly:
+
+```
+Using uv 0.13.5 (x86_64-unknown-linux-gnu)
+Installing required dependencies from pyproject.toml...
+Build Completed in /vercel/output [2s]
+```
+
+With a `[tool.vercel]` table but no `[project]` table, that step installed
+**nothing**, the build still reported success in two seconds, and every request
+died at import:
+
+```
+ModuleNotFoundError: No module named 'flask'
+Python process exited with exit status: 1
+```
+
+A 2-second "successful" Python build is the tell: real dependency resolution
+takes longer. So runtime dependencies live in `[project].dependencies`, and
+`requirements.txt` is kept for local development only — **the two must be kept
+in sync by hand.**
+
+The flat layout (`app/ docs/ scripts/ src/ tasks/ tests/`) also means setuptools
+auto-discovery aborts with "Multiple top-level packages discovered", so the
+package selection is pinned explicitly:
+
+```toml
+[tool.setuptools.packages.find]
+include = ["app*"]
+```
+
+Pin the interpreter too. Without `requires-python` the builder logs
+`No Python version specified ... Using python version: 3.12` and picks for you.
 
 ## The second failure the entrypoint fix would have exposed
 
