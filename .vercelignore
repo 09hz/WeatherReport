@@ -1,0 +1,29 @@
+# Keep the deployment bundle to application code.
+# The build installs from requirements.txt; a local virtualenv must never ship.
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Agent / editor / tracker state.
+.beads/
+.beads.gate.lock
+.worktrees/
+.idea/
+.agents/
+.claude/
+.codex/
+.cursor/
+.pytest_cache/
+
+# Local-only data and secrets. instance/ is the dev SQLite dir; on Vercel the
+# database lives under /tmp (see docs/VERCEL_DEPLOYMENT.md).
+instance/
+.env
+.env.*
+
+# Tests and dev scripts are not needed at runtime.
+tests/
+scripts/
+tasks/
+docs/

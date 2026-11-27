@@ -1,8 +1,13 @@
-"""Database schema definition and initialization."""
+"""Database schema definition and initialization.
+
+The SQLite statements are canonical; the Postgres variants are derived from
+them (identity columns instead of AUTOINCREMENT, and a timestamp default that
+produces the same text SQLite's datetime('now') does). Both backends therefore
+store created_at/updated_at as `YYYY-MM-DD HH:MM:SS` text, which the API
+serializers return verbatim.
+"""
 
 from __future__ import annotations
-
-import sqlite3
 
 SCHEMA_STATEMENTS: tuple[str, ...] = (
     """
@@ -41,16 +46,42 @@ SCHEMA_STATEMENTS: tuple[str, ...] = (
 
 TABLE_NAMES: tuple[str, ...] = ("weather_snapshots", "journal_entries")
 
+_SQLITE_TABLES_QUERY = "SELECT name FROM sqlite_master WHERE type = 'table'"
+_PG_TABLES_QUERY = (
+    "SELECT table_name AS name FROM information_schema.tables "
+    "WHERE table_schema = current_schema()"
+)
 
-def initialize(connection: sqlite3.Connection) -> None:
+
+def _is_postgres(connection: object) -> bool:
+    """True for the PgConnection adapter, without importing psycopg."""
+    return type(connection).__module__.endswith("database.postgres")
+
+
+def _postgres_statements() -> tuple[str, ...]:
+    from .postgres import PG_NOW_TEXT
+
+    return tuple(
+        statement.replace("INTEGER PRIMARY KEY AUTOINCREMENT", "BIGSERIAL PRIMARY KEY")
+        .replace("REAL", "DOUBLE PRECISION")
+        .replace("(datetime('now'))", f"({PG_NOW_TEXT})")
+        for statement in SCHEMA_STATEMENTS
+    )
+
+
+def statements_for(connection: object) -> tuple[str, ...]:
+    """DDL for whichever backend `connection` talks to."""
+    return _postgres_statements() if _is_postgres(connection) else SCHEMA_STATEMENTS
+
+
+def initialize(connection) -> None:
     """Create tables and indexes if they do not already exist (idempotent)."""
     with connection:
-        for statement in SCHEMA_STATEMENTS:
+        for statement in statements_for(connection):
             connection.execute(statement)
 
 
-def existing_tables(connection: sqlite3.Connection) -> set[str]:
-    rows = connection.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table'"
-    ).fetchall()
+def existing_tables(connection) -> set[str]:
+    query = _PG_TABLES_QUERY if _is_postgres(connection) else _SQLITE_TABLES_QUERY
+    rows = connection.execute(query).fetchall()
     return {row["name"] if hasattr(row, "keys") else row[0] for row in rows}

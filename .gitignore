@@ -31,6 +31,9 @@ dist/
 .dolt/
 .beads-credential-key
 .beads/proxieddb/
+# Request audit trail. REQUEST_LOG_ENABLED defaults to true, so a local run
+# writes this; it is per-machine runtime noise, never source (WeatherReport-9vj).
+.beads/logs/
 *.gate.lock*
 
 # CEO and Local Task Files
@@ -38,3 +41,12 @@ tasks/
 .worktrees
 
 
+.vercel
+# Added by `vercel link` as the broad glob `.env*`, which also matched
+# .env.example -- a TRACKED file that is meant to be committed. Narrowed to the
+# real secrets so new example/template files stay visible (WeatherReport-dho).
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.production.local

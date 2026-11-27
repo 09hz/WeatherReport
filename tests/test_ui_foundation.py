@@ -18,12 +18,15 @@ STYLESHEET = (
 )
 
 
-def test_index_is_still_the_json_api_listing(client):
-    """Mounting the UI must not take over the root route."""
+def test_root_redirects_to_the_ui(client):
+    """The root now belongs to the UI; the JSON listing lives at /api."""
     response = client.get("/")
-    assert response.status_code == 200
-    assert response.is_json
-    assert response.get_json()["name"] == "weather-journal"
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/ui/")
+
+    api = client.get("/api")
+    assert api.is_json
+    assert api.get_json()["name"] == "weather-journal"
 
 
 def test_ui_root_renders_html(client):

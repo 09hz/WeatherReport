@@ -1,0 +1,46 @@
+# Vercel's Python builder resolves dependencies with uv from THIS FILE whenever
+# a pyproject.toml exists -- requirements.txt is then IGNORED. The build log is
+# explicit about it:
+#   Using uv 0.13.5 ... Installing required dependencies from pyproject.toml...
+# Without a [project] table that step installs NOTHING, the build still reports
+# success in ~2s, and every request then dies at import with
+# "ModuleNotFoundError: No module named 'flask'" (WeatherReport-4u0).
+# So runtime dependencies MUST live here. Keep them in sync with
+# requirements.txt, which is what local development installs from.
+[project]
+name = "weather-report"
+version = "0.1.0"
+description = "Weather lookup and journal backend (Flask + NWS)."
+requires-python = ">=3.12"
+dependencies = [
+    "Flask>=3.0,<4.0",
+    "python-dotenv>=1.0",
+    "requests>=2.31",
+    # Only used when DATABASE_URL is a postgres:// URL, but the import must
+    # resolve on a cold start that has one configured.
+    "psycopg[binary]>=3.1,<4.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# Flat layout with several top-level directories (app/ docs/ scripts/ src/
+# tasks/ tests/). Without an explicit selection setuptools auto-discovery
+# aborts with "Multiple top-level packages discovered". Only app/ is importable
+# source; the serverless function imports run.py from the shipped source tree,
+# so nothing here needs to package templates or static assets.
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+# Vercel's framework detection scans app.py / index.py / main.py / server.py /
+# wsgi.py for a MODULE-LEVEL Flask instance. This project boots through the
+# factory app/__init__.py::create_app, and main.py is a dev launcher that owns
+# no module-level `app`, so detection fails with:
+#   Found main.py but it does not define a top-level "app" Flask instance.
+# run.py does expose one, so point the platform straight at it.
+[tool.vercel]
+entrypoint = "run:app"

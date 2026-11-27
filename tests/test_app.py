@@ -23,8 +23,15 @@ def test_app_starts_without_any_credentials(app):
     assert app.config["SECRET_KEY"]  # ephemeral key generated for dev/test
 
 
-def test_index_lists_endpoints(client):
+def test_root_redirects_to_the_ui(client):
+    """A browser hitting the bare domain must land on the UI, not JSON."""
     response = client.get("/")
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/ui/")
+
+
+def test_api_index_lists_endpoints(client):
+    response = client.get("/api")
     assert response.status_code == 200
     assert response.get_json()["name"] == "weather-journal"
 
@@ -113,3 +120,70 @@ def test_health_reports_injected_weather_provider_and_environment(app, client):
     assert body["weather_provider"]["name"] == "fake-provider"
     assert body["weather_provider"]["available"] is True
     assert body["environment"] == app.config["ENV"]
+
+
+# WeatherReport-9vj: Config declared these fields but to_flask_mapping never
+# emitted them, so every app.config.get(...) in create_app saw None. Rate
+# limiting was therefore off in any real deployment despite defaulting to True,
+# and the RATE_LIMIT_*/WEATHER_CACHE_* env vars had no effect at all. These
+# tests pin the pass-through so the keys cannot be dropped again silently.
+_PASSED_THROUGH_KEYS = (
+    "WEATHER_CACHE_TTL_SECONDS",
+    "WEATHER_CACHE_MAX_ENTRIES",
+    "REQUEST_LOG_ENABLED",
+    "REQUEST_LOG_PATH",
+    "RATE_LIMIT_ENABLED",
+    "RATE_LIMIT_REQUESTS",
+    "RATE_LIMIT_WINDOW_SECONDS",
+)
+
+
+def test_to_flask_mapping_emits_every_runtime_key(clean_env):
+    from app.config import load_config
+
+    mapping = load_config().to_flask_mapping()
+    missing = [key for key in _PASSED_THROUGH_KEYS if key not in mapping]
+    assert missing == [], f"to_flask_mapping dropped: {missing}"
+
+
+def test_rate_limit_defaults_reach_app_config(clean_env, tmp_path: Path):
+    """Outside TESTING the declared default (enabled, 100/60s) must survive."""
+    from app.config import load_config
+
+    mapping = load_config().to_flask_mapping()
+    assert mapping["RATE_LIMIT_ENABLED"] is True
+    assert mapping["RATE_LIMIT_REQUESTS"] == 100
+    assert mapping["RATE_LIMIT_WINDOW_SECONDS"] == 60
+
+
+def test_rate_limit_and_cache_env_overrides_are_honoured(
+    clean_env, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("RATE_LIMIT_REQUESTS", "7")
+    monkeypatch.setenv("RATE_LIMIT_WINDOW_SECONDS", "11")
+    monkeypatch.setenv("WEATHER_CACHE_TTL_SECONDS", "13")
+    monkeypatch.setenv("WEATHER_CACHE_MAX_ENTRIES", "17")
+
+    from app.config import load_config
+
+    mapping = load_config().to_flask_mapping()
+    assert mapping["RATE_LIMIT_REQUESTS"] == 7
+    assert mapping["RATE_LIMIT_WINDOW_SECONDS"] == 11
+    assert mapping["WEATHER_CACHE_TTL_SECONDS"] == 13
+    assert mapping["WEATHER_CACHE_MAX_ENTRIES"] == 17
+
+
+def test_testing_still_disables_rate_limit_and_request_log(app):
+    """The suite must not start throttling itself once the keys flow through."""
+    assert app.config["TESTING"] is True
+    assert app.config["RATE_LIMIT_ENABLED"] is False
+    assert app.config["REQUEST_LOG_ENABLED"] is False
+
+
+def test_request_log_path_present_whenever_logging_enabled(clean_env):
+    """request_log.py indexes REQUEST_LOG_PATH directly, so it must exist."""
+    from app.config import load_config
+
+    mapping = load_config().to_flask_mapping()
+    if mapping["REQUEST_LOG_ENABLED"]:
+        assert mapping["REQUEST_LOG_PATH"]

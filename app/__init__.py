@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, redirect, url_for
 
 from . import database
 from .config import load_config
@@ -75,11 +75,19 @@ def create_app(overrides: Mapping[str, Any] | None = None) -> Flask:
 
     @app.get("/")
     def index():
+        # A browser hitting the bare domain must get the UI, not a JSON dump.
+        # The machine-readable listing moved to /api; this redirect keeps /ui/
+        # as the single canonical UI URL instead of mounting it twice.
+        return redirect(url_for("ui.index"))
+
+    @app.get("/api")
+    def api_index():
         return (
             jsonify(
                 {
                     "name": "weather-journal",
                     "version": __version__,
+                    "ui": "GET  /ui/",
                     "endpoints": [
                         "GET  /health",
                         "GET  /api/limits/status",
