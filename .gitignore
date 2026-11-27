@@ -2,6 +2,8 @@
 .venv
 __pycache__
 .github
+.vercel
+.beads/logs
 
 # Environment / secrets
 .env
@@ -34,3 +36,5 @@ dist/
 # CEO and Local Task Files
 tasks/
 .worktrees
+
+
