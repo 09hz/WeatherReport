@@ -49,6 +49,24 @@ def _is_placeholder(value: str) -> bool:
     return value.strip().lower() in _PLACEHOLDERS
 
 
+def _serverless() -> bool:
+    """True on a read-only serverless filesystem (Vercel sets VERCEL=1)."""
+    return bool(os.environ.get("VERCEL"))
+
+
+def _default_database_path() -> str:
+    """Only /tmp is writable on Vercel; the repo checkout is read-only."""
+    if _serverless():
+        return "/tmp/weather_journal.db"
+    return "instance/weather_journal.db"
+
+
+def _default_request_log_path() -> str:
+    if _serverless():
+        return "/tmp/weather_report_app.log"
+    return ".beads/logs/app.log"
+
+
 @dataclass(frozen=True)
 class Config:
     """Immutable snapshot of the runtime configuration."""
@@ -57,8 +75,12 @@ class Config:
     debug: bool = field(default_factory=lambda: _env_bool("FLASK_DEBUG", False))
     secret_key: str = field(default_factory=lambda: _env_str("SECRET_KEY"))
     database_path: str = field(
-        default_factory=lambda: _env_str("DATABASE_PATH", "instance/weather_journal.db")
+        default_factory=lambda: _env_str("DATABASE_PATH", _default_database_path())
     )
+    # Set to a postgres:// or postgresql:// URL to use a network database
+    # instead of local SQLite. Required for durable storage on serverless
+    # platforms, where the filesystem (including /tmp) is ephemeral.
+    database_url: str = field(default_factory=lambda: _env_str("DATABASE_URL"))
     weather_api_key: str = field(default_factory=lambda: _env_str("WEATHER_API_KEY"))
     weather_api_base_url: str = field(
         default_factory=lambda: _env_str("WEATHER_API_BASE_URL")
@@ -97,7 +119,9 @@ class Config:
         default_factory=lambda: _env_bool("REQUEST_LOG_ENABLED", True)
     )
     request_log_path: str = field(
-        default_factory=lambda: _env_str("REQUEST_LOG_PATH", ".beads/logs/app.log")
+        default_factory=lambda: _env_str(
+            "REQUEST_LOG_PATH", _default_request_log_path()
+        )
     )
     rate_limit_enabled: bool = field(
         default_factory=lambda: _env_bool("RATE_LIMIT_ENABLED", True)
@@ -143,6 +167,7 @@ class Config:
             # An ephemeral key keeps dev/test usable; production must set one.
             "SECRET_KEY": self.secret_key or secrets.token_urlsafe(32),
             "DATABASE_PATH": str(self.resolved_database_path),
+            "DATABASE_URL": self.database_url,
             "WEATHER_API_KEY": self.weather_api_key,
             "WEATHER_API_BASE_URL": self.weather_api_base_url,
             "WEATHER_TIMEOUT_SECONDS": self.weather_timeout_seconds,

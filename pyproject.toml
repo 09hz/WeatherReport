@@ -1,0 +1,11 @@
+# Vercel's Python framework detection looks for a top-level Flask instance in
+# app.py / index.py / main.py / server.py / wsgi.py. This project boots through
+# an application factory (app/__init__.py::create_app), and main.py is a dev
+# launcher that owns no module-level `app`, so detection fails with:
+#   Found main.py but it does not define a top-level "app" Flask instance.
+# run.py does expose one, so point Vercel straight at it.
+#
+# Dependencies are intentionally left in requirements.txt: no [project] table
+# here, so the build keeps using pip + requirements.txt.
+[tool.vercel]
+entrypoint = "run:app"

@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import sqlite3
-
 from flask import Blueprint, current_app, jsonify
 
-from ..database.connection import get_connection
+from ..database.connection import database_errors, get_connection
 from ..database.schema import TABLE_NAMES, existing_tables
 
 bp = Blueprint("health", __name__)
@@ -21,7 +19,7 @@ def health():
         tables = existing_tables(get_connection())
         missing_tables = sorted(set(TABLE_NAMES) - tables)
         database_ok = not missing_tables
-    except sqlite3.Error as exc:
+    except database_errors() as exc:
         current_app.logger.warning("Health check database error: %s", exc)
 
     provider = current_app.extensions.get("weather_provider")

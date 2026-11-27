@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "env": {
+    "WEATHER_PROVIDER": "nws",
+    "NWS_USER_AGENT": "(weatherreport.vercel.app, contact@example.com)",
+    "DATABASE_PATH": "/tmp/weather_journal.db",
+    "REQUEST_LOG_ENABLED": "false",
+    "FLASK_ENV": "production",
+    "FLASK_DEBUG": "false"
+  }
+}
